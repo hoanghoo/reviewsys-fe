@@ -14,4 +14,26 @@ instance.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
+// Response interceptor: auto-logout on 401/403
+instance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      const status = error.response.status;
+      
+      if (status === 401 || status === 403) {
+        // Clear auth data and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Only redirect if not already on login page
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login?expired=1';
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default instance;

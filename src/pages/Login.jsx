@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { LogIn, User, Lock, AlertCircle } from 'lucide-react';
 
 const Login = () => {
@@ -10,7 +11,15 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   
   const { login } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('expired') === '1') {
+      toast.warning('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
