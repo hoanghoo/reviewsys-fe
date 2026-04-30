@@ -147,9 +147,9 @@ const UserManager = () => {
             <label className="block text-xs font-medium text-slate-500 mb-1">Vai trò hệ thống</label>
             <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="w-full border-slate-300 rounded-lg p-2 text-sm focus:ring-purple-500 focus:border-purple-500 outline-none">
               <option value="">Tất cả vai trò</option>
-              <option value="Admin">Admin</option>
-              <option value="Manager">Manager</option>
-              <option value="Employee">Employee</option>
+              <option value="Admin">Người vận hành</option>
+              <option value="Manager">Quản lý</option>
+              <option value="Employee">Người dùng</option>
             </select>
           </div>
         </div>
@@ -178,7 +178,7 @@ const UserManager = () => {
                 <td className="px-4 py-2 text-slate-600">{u.Team ? u.Team.shortName : '-'}</td>
                 <td className="px-4 py-2">
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold ${u.role === 'Admin' ? 'bg-red-100 text-red-700' : u.role === 'Manager' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {u.role}
+                    {u.role === 'Admin' ? 'Người vận hành' : u.role === 'Manager' ? 'Quản lý' : 'Người dùng'}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right">
@@ -264,9 +264,9 @@ const UserManager = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Vai trò hệ thống</label>
                   <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none">
-                    <option value="Employee">Cán bộ/Nhân viên</option>
-                    <option value="Manager">Cấp lãnh đạo</option>
-                    <option value="Admin">Admin Hệ thống</option>
+                    <option value="Employee">Người dùng</option>
+                    <option value="Manager">Quản lý</option>
+                    <option value="Admin">Người vận hành</option>
                   </select>
                 </div>
               </div>

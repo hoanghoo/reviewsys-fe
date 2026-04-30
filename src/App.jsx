@@ -7,8 +7,8 @@ import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 
 // Dummy Dashboards for Phase 2
-const ManagerDashboard = () => <div className="p-8 text-white min-h-screen bg-slate-900 text-2xl font-bold">Manager Dashboard</div>;
-const EmployeeDashboard = () => <div className="p-8 text-white min-h-screen bg-slate-900 text-2xl font-bold">Employee Dashboard</div>;
+const ManagerDashboard = () => <div className="p-8 text-white min-h-screen bg-slate-900 text-2xl font-bold">Dashboard Quản lý</div>;
+const EmployeeDashboard = () => <div className="p-8 text-white min-h-screen bg-slate-900 text-2xl font-bold">Dashboard Người dùng</div>;
 
 function App() {
   return (

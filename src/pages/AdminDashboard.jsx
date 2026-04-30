@@ -55,7 +55,7 @@ const AdminDashboard = () => {
         <div className="p-4 border-t border-slate-100">
           <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-100">
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{user?.role}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{user?.role === 'Admin' ? 'Người vận hành' : user?.role === 'Manager' ? 'Quản lý' : 'Người dùng'}</p>
           </div>
           <button 
             onClick={logout}
