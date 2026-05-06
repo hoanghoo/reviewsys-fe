@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
+import ConfirmModal from '../common/ConfirmModal';
 import { Shield, Users, Award, Search, Plus, X, Trash2, Edit, UserPlus } from 'lucide-react';
 
 const TeamManager = () => {
@@ -14,6 +15,12 @@ const TeamManager = () => {
 
   const [leaderModalTeam, setLeaderModalTeam] = useState(null); // team object for assigning leader
   const [selectedLeaderId, setSelectedLeaderId] = useState('');
+
+  const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
+
+  const showConfirm = (title, message, type, onConfirm) => {
+    setConfirmConfig({ isOpen: true, title, message, type, onConfirm });
+  };
 
   useEffect(() => {
     fetchData();
@@ -51,15 +58,20 @@ const TeamManager = () => {
   };
 
   const handleDelete = async (id) => {
-    if (confirm('Chắc chắn xóa đội này?')) {
-      try {
-        await api.delete(`/teams/${id}`);
-        toast.success('Đã xóa đội.');
-        fetchData();
-      } catch (err) {
-        toast.error('Lỗi xóa: ' + (err.response?.data?.message || err.message));
+    showConfirm(
+      'Xóa Cơ Cấu Đội',
+      'Chắc chắn xóa đội này? Hành động này không thể hoàn tác.',
+      'danger',
+      async () => {
+        try {
+          await api.delete(`/teams/${id}`);
+          toast.success('Đã xóa đội.');
+          fetchData();
+        } catch (err) {
+          toast.error('Lỗi xóa: ' + (err.response?.data?.message || err.message));
+        }
       }
-    }
+    );
   };
 
   const handleAssignLeader = async (e) => {
@@ -246,6 +258,15 @@ const TeamManager = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+      />
     </div>
   );
 };
