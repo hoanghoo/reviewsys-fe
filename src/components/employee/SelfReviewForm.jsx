@@ -30,7 +30,7 @@ const DOCX_PREVIEW_STYLES = `
 
 const inputClass = "h-7 border-b border-slate-300 bg-transparent outline-none px-1.5 text-slate-800 font-semibold focus:border-blue-500 transition-colors placeholder:font-normal placeholder:text-slate-400";
 
-const SelfReviewForm = ({ period, onBack, readOnly }) => {
+const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
   const toast = useToast();
   const formRef = useRef(null);
   
@@ -41,19 +41,38 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
   // Form State
   const [commanderName, setCommanderName] = useState('');
   const [totalScore, setTotalScore] = useState(0);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   
+  const isReadOnly = readOnly || isSubmitted;
+
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
 
   useEffect(() => {
     fetchData();
-  }, [period]);
+  }, [period, employeeProfile]);
+
+  // Manually inject HTML to prevent React from wiping DOM input values on re-render
+  useEffect(() => {
+    if (formRef.current && !isLoading) {
+      if (templateHtml) {
+        formRef.current.innerHTML = templateHtml;
+      } else {
+        formRef.current.innerHTML = '<p class="text-center text-slate-500 py-10">Không tìm thấy nội dung biểu mẫu.</p>';
+      }
+    }
+  }, [templateHtml, isLoading]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      // Fetch user profile
-      const profileRes = await api.get('/users/profile');
-      setProfile(profileRes.data);
+      // Fetch user profile if not provided
+      let currentProfile = employeeProfile;
+      if (!currentProfile) {
+        const profileRes = await api.get('/users/profile');
+        currentProfile = profileRes.data;
+      }
+      setProfile(currentProfile);
+      setCommanderName(currentProfile.managerName || '');
 
       // Fetch Template HTML
       if (period?.templateId) {
@@ -66,9 +85,13 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
         const review = period.Reviews[0];
         setTotalScore(review.selfScore || 0);
         
+        if (review.status && review.status !== 'Draft') {
+          setIsSubmitted(true);
+        }
+        
         try {
           const parsedFeedback = typeof review.feedback === 'string' ? JSON.parse(review.feedback) : (review.feedback || {});
-          setCommanderName(parsedFeedback.commander || '');
+          setCommanderName(parsedFeedback.commander || profileRes.data.managerName || '');
           
           // Wait for next tick so dangerouslySetInnerHTML mounts
           setTimeout(() => {
@@ -83,7 +106,7 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
                   if (noteInputs[i]) noteInputs[i].value = val;
                 });
                 
-                calculateTotalFromDOM();
+                calculateTree();
              }
           }, 100);
         } catch(e) {}
@@ -95,23 +118,127 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
     }
   };
 
-  const calculateTotalFromDOM = () => {
+  const calculateTree = () => {
     if (!formRef.current) return;
-    const inputs = formRef.current.querySelectorAll('.score-input');
-    let sum = 0;
+    const inputs = Array.from(formRef.current.querySelectorAll('.score-input'));
+    
+    // 1. Identify which inputs are parents (they have children pointing to them)
+    const parentIds = new Set();
     inputs.forEach(input => {
-      sum += Number(input.value) || 0;
+      const parentId = input.getAttribute('data-parent-id');
+      if (parentId && parentId !== 'root') {
+        parentIds.add(parentId);
+      }
     });
-    setTotalScore(sum);
+
+    // 2. Mark parents as readonly to prevent manual overriding of calculated sums
+    inputs.forEach(input => {
+      const id = input.getAttribute('data-id');
+      if (parentIds.has(id)) {
+        if (!input.readOnly) {
+          input.readOnly = true;
+          input.placeholder = "...";
+        }
+      }
+    });
+
+    // 3. Recursive function to calculate and update node values
+    const getValue = (nodeId) => {
+      const nodeInput = inputs.find(i => i.getAttribute('data-id') === nodeId);
+      if (!nodeInput) return 0;
+
+      const children = inputs.filter(i => i.getAttribute('data-parent-id') === nodeId);
+      if (children.length > 0) {
+        let sum = 0;
+        children.forEach(child => {
+          sum += getValue(child.getAttribute('data-id'));
+        });
+        nodeInput.value = sum; // Update parent's DOM
+        return sum;
+      } else {
+        return Number(nodeInput.value) || 0;
+      }
+    };
+
+    // 4. Calculate final total from all root-level nodes
+    const rootChildren = inputs.filter(i => i.getAttribute('data-parent-id') === 'root');
+    let total = 0;
+    rootChildren.forEach(child => {
+       const val = getValue(child.getAttribute('data-id'));
+       const row = child.closest('tr');
+       const firstCellText = row?.querySelector('td')?.textContent.trim().toUpperCase() || '';
+       
+       // Deduct penalty section (III)
+       if (firstCellText === 'III') {
+         total -= val;
+       } else {
+         total += val;
+       }
+    });
+    
+    setTotalScore(total);
   };
 
   const handleTableInput = (e) => {
-    if (readOnly) {
+    if (isReadOnly) {
        e.preventDefault();
        return;
     }
+    
     if (e.target.classList.contains('score-input')) {
-      calculateTotalFromDOM();
+      // Allow only positive integers
+      const oldVal = e.target.value;
+      const newVal = oldVal.replace(/[^0-9]/g, '');
+      if (oldVal !== newVal) {
+        e.target.value = newVal;
+      }
+      
+      calculateTree();
+    }
+  };
+
+  const handleTableKeyDown = (e) => {
+    if (isReadOnly) return;
+    const target = e.target;
+    if (target.tagName.toLowerCase() !== 'input' || target.readOnly) return;
+
+    const isScore = target.classList.contains('score-input');
+    
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const colInputs = Array.from(formRef.current.querySelectorAll(`input.${isScore ? 'score-input' : 'note-input'}:not([readonly])`));
+      const colIndex = colInputs.indexOf(target);
+      if (colIndex === -1) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (colIndex < colInputs.length - 1) colInputs[colIndex + 1].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (colIndex > 0) colInputs[colIndex - 1].focus();
+      }
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      let atStart = true;
+      let atEnd = true;
+      try {
+        atStart = target.selectionStart === 0;
+        atEnd = target.selectionStart === target.value.length;
+      } catch (err) {
+        // type="number" throws error on selectionStart, we just let it jump immediately
+      }
+
+      if ((e.key === 'ArrowRight' && atEnd) || (e.key === 'ArrowLeft' && atStart)) {
+        const allInputs = Array.from(formRef.current.querySelectorAll('input:not([readonly])'));
+        const allIndex = allInputs.indexOf(target);
+        if (allIndex === -1) return;
+
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          if (allIndex < allInputs.length - 1) allInputs[allIndex + 1].focus();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (allIndex > 0) allInputs[allIndex - 1].focus();
+        }
+      }
     }
   };
 
@@ -190,7 +317,7 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
           <ArrowLeft className="w-4 h-4" /> Quay lại danh sách
         </button>
         <div className="flex items-center gap-3 text-sm">
-          {readOnly && <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-md font-bold text-xs uppercase tracking-wider border border-slate-200">Chế độ xem</span>}
+          {isReadOnly && <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-md font-bold text-xs uppercase tracking-wider border border-slate-200">Chế độ xem</span>}
         </div>
       </div>
 
@@ -239,9 +366,9 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
           {/* Dynamic Table from DOCX */}
           <div 
             ref={formRef}
-            className={`docx-preview overflow-x-auto pb-4 ${readOnly ? 'pointer-events-none opacity-90' : ''}`} 
-            dangerouslySetInnerHTML={{ __html: templateHtml || '<p class="text-center text-slate-500 py-10">Không tìm thấy nội dung biểu mẫu.</p>' }} 
+            className={`docx-preview overflow-x-auto pb-4 ${isReadOnly ? 'pointer-events-none opacity-90' : ''}`} 
             onInput={handleTableInput}
+            onKeyDown={handleTableKeyDown}
           />
 
           {/* Footer Layout based on Admin Preview */}
@@ -263,7 +390,7 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
                 <p className="text-slate-500 italic mb-12">(Ký, ghi rõ họ tên)</p>
                 <input 
                   type="text" 
-                  readOnly={readOnly}
+                  readOnly={isReadOnly}
                   value={commanderName}
                   onChange={e => setCommanderName(e.target.value)}
                   placeholder="Nhập họ tên chỉ huy..."
@@ -292,7 +419,7 @@ const SelfReviewForm = ({ period, onBack, readOnly }) => {
         </div>
       </div>
 
-      {!readOnly && (
+      {!isReadOnly && (
         <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row justify-end gap-3 mt-4">
           <button className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
             <Download className="w-4 h-4" /> Xuất nháp (Word)

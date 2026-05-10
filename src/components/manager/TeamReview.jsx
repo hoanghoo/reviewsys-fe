@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
-import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar } from 'lucide-react';
+import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+
+import SelfReviewForm from '../employee/SelfReviewForm';
 
 const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const { user: currentUser } = useAuth();
@@ -19,7 +21,6 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [activePeriod, setActivePeriod] = useState(null);
   const [selectedReview, setSelectedReview] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editScore, setEditScore] = useState('');
   const [editFeedback, setEditFeedback] = useState('');
   const [stats, setStats] = useState({ total: 0, notStarted: 0, submitted: 0, managerReviewed: 0, completed: 0 });
@@ -37,11 +38,9 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      // 1. Lấy tất cả các kỳ đánh giá
       const periodsRes = await api.get('/review-periods');
       setPeriods(periodsRes.data);
 
-      // 3. Lấy kỳ đánh giá mục tiêu
       if (propPeriodId) {
         const targetPeriod = periodsRes.data.find(p => p.id === parseInt(propPeriodId));
         setActivePeriod(targetPeriod);
@@ -55,10 +54,9 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
         }
       }
 
-      // 4. Nếu là Admin, lấy thêm danh sách đội
       if (currentUser?.role === 'Admin') {
         const teamsRes = await api.get('/teams');
-        setDepartments(teamsRes.data); // Keep the variable name for simplicity or rename it
+        setDepartments(teamsRes.data);
       }
     } catch (err) {
       toast.error('Lỗi tải kỳ đánh giá: ' + (err.response?.data?.message || err.message));
@@ -100,10 +98,8 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     setSelectedReview({ ...review, user });
     setEditScore(review.score);
 
-    // Parse feedback if it's a string
     const fb = typeof review.feedback === 'string' ? JSON.parse(review.feedback) : review.feedback;
     setEditFeedback(fb);
-    setIsModalOpen(true);
   };
 
   const handleApprove = async () => {
@@ -114,8 +110,8 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
         feedback: editFeedback
       });
       toast.success('Đã duyệt đánh giá thành công!');
-      setIsModalOpen(false);
-      fetchTeamData(selectedPeriodId, pagination?.page || 1); // Refresh list
+      setSelectedReview(null);
+      fetchTeamData(selectedPeriodId, pagination?.page || 1);
     } catch (err) {
       toast.error('Lỗi duyệt đánh giá: ' + (err.response?.data?.message || err.message));
     }
@@ -126,7 +122,24 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     setSelectedPeriodId(periodId);
     const period = periods.find(p => p.id === parseInt(periodId));
     setActivePeriod(period);
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset page safely
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const response = await api.get(`/reviews/export-excel?periodId=${selectedPeriodId}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Ket_qua_danh_gia_${activePeriod?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Thang'}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      toast.error('Lỗi xuất Excel: ' + (error.response?.data?.message || error.message));
+    }
   };
 
   const getStatusIcon = (status) => {
@@ -147,13 +160,78 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     }
   };
 
-
   if (loading) return <div className="p-12 text-center text-slate-500">Đang tải danh sách đội...</div>;
 
   if (!activePeriod) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
         <p className="text-slate-500">Không có kỳ đánh giá nào đang mở để theo dõi.</p>
+      </div>
+    );
+  }
+
+  // Render Review Detail View
+  if (selectedReview) {
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-12">
+        {/* Full Document View (ReadOnly) */}
+        <SelfReviewForm 
+          period={{...activePeriod, Reviews: [selectedReview]}}
+          employeeProfile={selectedReview.user}
+          readOnly={true}
+          onBack={() => setSelectedReview(null)}
+        />
+
+        {/* Manager Approval Panel */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative z-10">
+          <div className="bg-blue-50 border-b border-blue-100 p-4">
+            <h3 className="font-bold text-blue-900 flex items-center gap-2">
+              <FileSignature className="w-5 h-5 text-blue-600" />
+              Phê duyệt đánh giá nhân viên: {selectedReview.user.fullName}
+            </h3>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Điểm phê duyệt cuối cùng <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={editScore}
+                  onChange={e => setEditScore(e.target.value)}
+                  className="w-full border-slate-300 rounded-xl p-4 pl-6 border-2 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-black text-blue-700 text-3xl transition-all shadow-inner"
+                />
+              </div>
+              <p className="text-xs text-slate-500 mt-2 font-medium bg-slate-50 p-2 rounded flex gap-2">
+                <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                Mặc định là tổng điểm nhân viên tự đánh giá. Chỉ huy có thể điều chỉnh lại thành điểm cuối cùng.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Nhận xét của Chỉ huy</label>
+              <textarea
+                rows="4"
+                value={editFeedback?.managerNote || ''}
+                onChange={e => setEditFeedback({ ...editFeedback, managerNote: e.target.value })}
+                className="w-full border-slate-300 rounded-xl p-3 border-2 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
+                placeholder="Ghi chú ý kiến đánh giá, nhận xét ưu khuyết điểm..."
+              ></textarea>
+            </div>
+          </div>
+          <div className="bg-slate-50 p-5 border-t border-slate-200 flex justify-end gap-3">
+            <button 
+              onClick={() => setSelectedReview(null)} 
+              className="px-6 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors shadow-sm"
+            >
+              Quay lại danh sách
+            </button>
+            <button 
+              onClick={handleApprove} 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-200 flex items-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" /> Lưu & Phê duyệt biểu mẫu
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -176,7 +254,6 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* Search bar like Personnel module */}
           <div className="relative flex-1 lg:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
@@ -189,6 +266,15 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           </div>
 
           <div className="flex items-center gap-2">
+            {selectedPeriodId && (
+              <button 
+                onClick={handleExportExcel}
+                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-sm shadow-emerald-200 hover:bg-emerald-700 transition-colors"
+              >
+                <Download className="w-4 h-4" /> Xuất báo cáo Excel
+              </button>
+            )}
+
             {currentUser?.role === 'Admin' && (
               <div className="relative">
                 <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -240,7 +326,6 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
         </div>
       </div>
 
-      {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
           <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><UsersIcon className="w-5 h-5" /></div>
@@ -281,8 +366,6 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
             <tbody className="divide-y divide-slate-50">
               {teamData.map((member) => {
                 const review = member.ReviewsReceived && member.ReviewsReceived[0];
-                const fb = review ? (typeof review.feedback === 'string' ? JSON.parse(review.feedback) : review.feedback) : null;
-
                 return (
                   <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
@@ -344,7 +427,6 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           </table>
         </div>
 
-        {/* Pagination */}
         <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
           <p className="text-sm text-slate-500 font-medium">
             Hiển thị <span className="text-slate-800 font-bold">{teamData.length}</span> nhân sự
@@ -370,109 +452,6 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           </div>
         </div>
       </div>
-
-      {/* Review Modal */}
-      {isModalOpen && selectedReview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden my-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-600 text-white p-2 rounded-lg">
-                  <FileSignature className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-lg">Duyệt đánh giá: {selectedReview.user.fullName}</h3>
-                  <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Kỳ đánh giá: {activePeriod.name}</p>
-                </div>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-              {/* Summary info from self-review */}
-              <div className="grid grid-cols-3 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                <div className="text-center border-r border-blue-100">
-                  <p className="text-[10px] text-blue-600 font-bold uppercase">Chuyên môn</p>
-                  <p className="text-lg font-bold text-slate-800">{editFeedback?.part1Score || 0}</p>
-                </div>
-                <div className="text-center border-r border-blue-100">
-                  <p className="text-[10px] text-blue-600 font-bold uppercase">Cộng/Trừ</p>
-                  <p className="text-lg font-bold text-slate-800">+{editFeedback?.part2Score || 0} / -{editFeedback?.part3Score || 0}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-blue-600 font-bold uppercase">Tự chấm</p>
-                  <p className="text-lg font-bold text-blue-700">{selectedReview.score}</p>
-                </div>
-              </div>
-
-              {/* Sections details */}
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                    Nội dung chuyên môn
-                  </h4>
-                  <div className="mt-2 p-3 bg-slate-50 rounded-lg text-sm text-slate-700 whitespace-pre-wrap border border-slate-100 italic">
-                    {editFeedback?.part1?.details || 'Không có mô tả'}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    Thành tích (Cộng điểm)
-                  </h4>
-                  <div className="mt-2 p-3 bg-slate-50 rounded-lg text-sm text-slate-700 whitespace-pre-wrap border border-slate-100 italic">
-                    {editFeedback?.part2?.details || 'Không có mô tả'}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                    Vi phạm (Trừ điểm)
-                  </h4>
-                  <div className="mt-2 p-3 bg-slate-50 rounded-lg text-sm text-slate-700 whitespace-pre-wrap border border-slate-100 italic">
-                    {editFeedback?.part3?.details || 'Không có mô tả'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-px bg-slate-100"></div>
-
-              {/* Manager Inputs */}
-              <div className="space-y-4 pt-2">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Điểm phê duyệt cuối cùng</label>
-                  <input
-                    type="number"
-                    value={editScore}
-                    onChange={e => setEditScore(e.target.value)}
-                    className="w-full border-slate-300 rounded-xl p-3 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-bold text-blue-600 text-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Nhận xét của Quản lý</label>
-                  <textarea
-                    rows="3"
-                    value={editFeedback?.managerNote || ''}
-                    onChange={e => setEditFeedback({ ...editFeedback, managerNote: e.target.value })}
-                    className="w-full border-slate-300 rounded-xl p-3 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                    placeholder="Nhập ý kiến chỉ đạo hoặc nhận xét..."
-                  ></textarea>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-              <button onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-xl transition-colors">Hủy</button>
-              <button onClick={handleApprove} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-100 flex items-center gap-2">
-                <Save className="w-4 h-4" /> Lưu & Phê duyệt
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
