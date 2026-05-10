@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReviewList from '../components/employee/ReviewList';
 import Profile from '../components/common/Profile';
@@ -6,7 +7,7 @@ import { LayoutDashboard, LogOut, User as UserIcon } from 'lucide-react';
 
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const location = useLocation();
 
   const tabs = [
     { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
@@ -30,11 +31,11 @@ const EmployeeDashboard = () => {
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
+            const isActive = location.pathname.includes(`/employee/${tab.id}`);
             return (
-              <button
+              <Link
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                to={`/employee/${tab.id}`}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
                   isActive 
                   ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100' 
@@ -43,7 +44,7 @@ const EmployeeDashboard = () => {
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
                 {tab.label}
-              </button>
+              </Link>
             );
           })}
         </nav>
@@ -66,8 +67,11 @@ const EmployeeDashboard = () => {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-slate-50">
         <div className="p-6 max-w-5xl mx-auto">
-          {activeTab === 'overview' && <ReviewList />}
-          {activeTab === 'profile' && <Profile />}
+          <Routes>
+            <Route path="overview" element={<ReviewList />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="*" element={<Navigate to="overview" replace />} />
+          </Routes>
         </div>
       </main>
     </div>

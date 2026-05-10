@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { Users, FileSignature, LogOut, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,23 +8,12 @@ import Profile from '../components/common/Profile';
 
 const ManagerDashboard = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('team-tracking');
+  const location = useLocation();
 
   const tabs = [
     { id: 'team-tracking', label: 'Theo dõi Đội', icon: Users },
     { id: 'profile', label: 'Hồ sơ cá nhân', icon: UserIcon },
   ];
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'team-tracking':
-        return <TeamReview />;
-      case 'profile':
-        return <Profile />;
-      default:
-        return <TeamReview />;
-    }
-  };
 
   return (
     <div className="h-screen bg-slate-50 flex overflow-hidden">
@@ -42,11 +32,11 @@ const ManagerDashboard = () => {
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
+            const isActive = location.pathname.includes(`/manager/${tab.id}`);
             return (
-              <button
+              <Link
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                to={`/manager/${tab.id}`}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
                   isActive 
                   ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100' 
@@ -55,7 +45,7 @@ const ManagerDashboard = () => {
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
                 {tab.label}
-              </button>
+              </Link>
             );
           })}
         </nav>
@@ -78,7 +68,11 @@ const ManagerDashboard = () => {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-slate-50">
         <div className="p-6 max-w-7xl mx-auto">
-          {renderContent()}
+           <Routes>
+              <Route path="team-tracking" element={<TeamReview />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="*" element={<Navigate to="team-tracking" replace />} />
+           </Routes>
         </div>
       </main>
     </div>
