@@ -277,6 +277,70 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
     }
   };
 
+  const exportDocx = async () => {
+    if (!formRef.current) {
+      toast.error("Không tìm thấy nội dung biểu mẫu.");
+      return;
+    }
+
+    // Clone the form so we can replace inputs with text
+    const clone = formRef.current.cloneNode(true);
+    const inputs = clone.querySelectorAll('input');
+    inputs.forEach(input => {
+      const val = input.value || '';
+      const textNode = document.createTextNode(val);
+      if (input.parentNode) {
+        input.parentNode.replaceChild(textNode, input);
+      }
+    });
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt; }
+          th, td { border: 1px solid black; padding: 5px; vertical-align: top; }
+          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+          .text-center { text-align: center; }
+          .font-bold { font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <h2 style="text-align:center; font-family: Arial, sans-serif;">BẢNG CHẤM ĐIỂM</h2>
+        <p style="text-align:center; font-family: Arial, sans-serif;">Đánh giá kết quả thực hiện nhiệm vụ của Cán bộ chiến sĩ</p>
+        <p style="font-family: Arial, sans-serif;"><strong>Họ và tên:</strong> ${profile?.fullName || ''}</p>
+        <p style="font-family: Arial, sans-serif;"><strong>Đội:</strong> ${profile?.Team?.shortName || profile?.Team?.fullName || ''}</p>
+        <p style="font-family: Arial, sans-serif;"><strong>Cấp bậc - Chức vụ:</strong> ${profile?.rank || ''} - ${profile?.position || ''}</p>
+        <br/>
+        ${clone.innerHTML}
+        <br/>
+        <p style="font-family: Arial, sans-serif; font-size: 12pt;"><strong>Tổng điểm: ${totalScore}</strong></p>
+        <p style="font-family: Arial, sans-serif; font-size: 12pt;"><strong>Xếp loại: ${classifyScore(totalScore)}</strong></p>
+      </body>
+      </html>
+    `;
+
+    try {
+      const toastId = toast.info('Đang tạo file Word...', { autoClose: false });
+      const response = await api.post('/reviews/export-draft-docx', { html: htmlContent }, { responseType: 'blob' });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Ban_Danh_Gia_${profile?.fullName || 'NhanVien'}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.dismiss(toastId);
+      toast.success('Xuất file thành công!');
+    } catch (err) {
+      toast.error('Lỗi xuất file docx: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   const showSubmitConfirm = () => {
     setConfirmConfig({
       isOpen: true,
@@ -421,7 +485,7 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
 
       {!isReadOnly && (
         <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row justify-end gap-3 mt-4">
-          <button className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+          <button onClick={exportDocx} className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
             <Download className="w-4 h-4" /> Xuất nháp (Word)
           </button>
           <button onClick={showSubmitConfirm} className="px-8 py-2.5 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-200">
