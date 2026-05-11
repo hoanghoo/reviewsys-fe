@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from '../../context/ToastContext';
 import api from '../../lib/axios';
 import { Save, Download, CheckCircle, ArrowLeft, Info, Search } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../common/ConfirmModal';
 
 const DOCX_PREVIEW_STYLES = `
@@ -30,7 +31,8 @@ const DOCX_PREVIEW_STYLES = `
 
 const inputClass = "h-7 border-b border-slate-300 bg-transparent outline-none px-1.5 text-slate-800 font-semibold focus:border-blue-500 transition-colors placeholder:font-normal placeholder:text-slate-400";
 
-const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
+export default function SelfReviewForm({ period, onBack, employeeProfile = null, readOnly = false, isManagerMode = false, onTotalScoreChange, onApprove }) {
+  const { user: currentUserProfile } = useAuth();
   const toast = useToast();
   const formRef = useRef(null);
   
@@ -42,25 +44,46 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
   const [commanderName, setCommanderName] = useState('');
   const [totalScore, setTotalScore] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState('');
   
-  const isReadOnly = readOnly || isSubmitted;
+  const isReadOnly = (readOnly || isSubmitted) && !isManagerMode;
 
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
 
+  const reviewId = period?.Reviews?.[0]?.id;
+  const periodId = period?.id;
+  const targetUserId = employeeProfile?.id;
+
   useEffect(() => {
     fetchData();
-  }, [period, employeeProfile]);
+  }, [periodId, reviewId, targetUserId]);
 
-  // Manually inject HTML to prevent React from wiping DOM input values on re-render
+  // Manually inject HTML and configure inputs - only run when template or basic state changes
   useEffect(() => {
     if (formRef.current && !isLoading) {
       if (templateHtml) {
-        formRef.current.innerHTML = templateHtml;
+        // IMPORTANT: We only want to inject if it's currently empty or the template itself changed
+        // This prevents wiping out user input on re-renders caused by score updates
+        if (!formRef.current.innerHTML || formRef.current.getAttribute('data-template-id') !== period?.templateId) {
+          formRef.current.innerHTML = templateHtml;
+          formRef.current.setAttribute('data-template-id', period?.templateId);
+          
+          // Initial configuration of inputs
+          const allInputs = formRef.current.querySelectorAll('input.score-input, input.note-input');
+          allInputs.forEach(input => {
+            input.readOnly = isReadOnly;
+            if (isReadOnly) {
+              input.classList.add('bg-slate-50', 'cursor-not-allowed');
+            } else {
+              input.classList.remove('bg-slate-50', 'cursor-not-allowed');
+            }
+          });
+        }
       } else {
         formRef.current.innerHTML = '<p class="text-center text-slate-500 py-10">Không tìm thấy nội dung biểu mẫu.</p>';
       }
     }
-  }, [templateHtml, isLoading]);
+  }, [templateHtml, isLoading, isReadOnly, period?.templateId]);
 
   const fetchData = async () => {
     try {
@@ -96,6 +119,7 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
       if (period?.Reviews?.[0]) {
         const review = period.Reviews[0];
         setTotalScore(review.selfScore || 0);
+        setReviewStatus(review.status || '');
         
         if (review.status && review.status !== 'Draft') {
           setIsSubmitted(true);
@@ -193,6 +217,9 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
     });
     
     setTotalScore(total);
+    if (onTotalScoreChange) {
+      onTotalScoreChange(total);
+    }
   };
 
   const handleTableInput = (e) => {
@@ -514,10 +541,32 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
       </div>
 
       <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row justify-end gap-3 mt-4">
-        <button onClick={exportDocx} className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
-          <Download className="w-4 h-4" /> {isReadOnly ? 'Xuất bản đánh giá (Word)' : 'Xuất nháp (Word)'}
-        </button>
-        {!isReadOnly && (
+        {/* Back button for Manager Mode */}
+        {isManagerMode && (
+          <button 
+            onClick={onBack} 
+            className="px-6 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors shadow-sm"
+          >
+            Quay lại
+          </button>
+        )}
+
+        {(reviewStatus === 'ManagerReviewed' || reviewStatus === 'Completed' || reviewStatus === 'Reviewed') && (
+          <button onClick={exportDocx} className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+            <Download className="w-4 h-4" /> Xuất file Word
+          </button>
+        )}
+
+        {isManagerMode && reviewStatus === 'Submitted' && (
+          <button 
+            onClick={() => onApprove({})} 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-200 flex items-center gap-2"
+          >
+            <CheckCircle className="w-4 h-4" /> Phê duyệt biểu mẫu
+          </button>
+        )}
+
+        {!isReadOnly && !isManagerMode && (
           <button onClick={showSubmitConfirm} className="px-8 py-2.5 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-200">
             <Save className="w-4 h-4" /> Lưu & Nộp bản đánh giá
           </button>
@@ -534,7 +583,5 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
       />
     </div>
   );
-};
-
-export default SelfReviewForm;
+}
 

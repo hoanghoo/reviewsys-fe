@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const instance = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: 'https://api.hoanghm.site/api',
 });
 
 instance.interceptors.request.use((config) => {
@@ -20,12 +20,12 @@ instance.interceptors.response.use(
   (error) => {
     if (error.response) {
       const status = error.response.status;
-      
+
       if (status === 401 || status === 403) {
         // Clear auth data and redirect to login
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        
+
         // Only redirect if not already on login page
         if (!window.location.pathname.includes('/login')) {
           window.location.href = '/login?expired=1';
