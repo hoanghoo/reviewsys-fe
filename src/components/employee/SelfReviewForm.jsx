@@ -1,0 +1,540 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useToast } from '../../context/ToastContext';
+import api from '../../lib/axios';
+import { Save, Download, CheckCircle, ArrowLeft, Info, Search } from 'lucide-react';
+import ConfirmModal from '../common/ConfirmModal';
+
+const DOCX_PREVIEW_STYLES = `
+  .docx-preview table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .docx-preview th, .docx-preview td { border: 1px solid #cbd5e1; padding: 5px 8px; vertical-align: top; }
+  .docx-preview th { background: #f1f5f9; font-weight: 600; }
+  .docx-preview thead th { background: #e2e8f0; text-align: center; }
+  .docx-preview thead th:nth-child(1) { width: 5%; }
+  .docx-preview thead th:nth-child(2) { width: 40%; }
+  .docx-preview thead th:nth-child(3) { width: 15%; }
+  .docx-preview thead th:nth-child(4) { width: 15%; }
+  .docx-preview thead th:nth-child(5) { width: 25%; }
+  .docx-preview td:has(input) { padding: 0; vertical-align: middle; height: 1px; }
+  .docx-preview input.score-input,
+  .docx-preview input.note-input { width: 100%; height: 100%; min-height: 34px; display: block; border: none; border-radius: 0; padding: 0 8px; font-size: 12px; background: #fff; outline: none; box-sizing: border-box; transition: background 0.15s, box-shadow 0.15s; }
+  .docx-preview input.score-input { text-align: center; }
+  .docx-preview input.score-input::-webkit-inner-spin-button,
+  .docx-preview input.score-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .docx-preview input.score-input { -moz-appearance: textfield; }
+  .docx-preview input.score-input:hover,
+  .docx-preview input.note-input:hover { background: #f5f3ff; }
+  .docx-preview input.score-input:focus,
+  .docx-preview input.note-input:focus { background: #eef2ff; box-shadow: inset 0 0 0 2px #6366f1; }
+  .docx-preview p { margin: 0; line-height: 1.4; }
+`;
+
+const inputClass = "h-7 border-b border-slate-300 bg-transparent outline-none px-1.5 text-slate-800 font-semibold focus:border-blue-500 transition-colors placeholder:font-normal placeholder:text-slate-400";
+
+const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
+  const toast = useToast();
+  const formRef = useRef(null);
+  
+  const [profile, setProfile] = useState(null);
+  const [templateHtml, setTemplateHtml] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Form State
+  const [commanderName, setCommanderName] = useState('');
+  const [totalScore, setTotalScore] = useState(0);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  
+  const isReadOnly = readOnly || isSubmitted;
+
+  const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
+
+  useEffect(() => {
+    fetchData();
+  }, [period, employeeProfile]);
+
+  // Manually inject HTML to prevent React from wiping DOM input values on re-render
+  useEffect(() => {
+    if (formRef.current && !isLoading) {
+      if (templateHtml) {
+        formRef.current.innerHTML = templateHtml;
+      } else {
+        formRef.current.innerHTML = '<p class="text-center text-slate-500 py-10">Không tìm thấy nội dung biểu mẫu.</p>';
+      }
+    }
+  }, [templateHtml, isLoading]);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // 1. Fetch CURRENT logged in user (who is viewing this form)
+      const currentUserRes = await api.get('/users/profile');
+      const currentUser = currentUserRes.data;
+
+      // 2. Determine whose review this is
+      let reviewedUser = employeeProfile;
+      if (!reviewedUser) {
+        reviewedUser = currentUser;
+      }
+      setProfile(reviewedUser);
+
+      // 3. Determine Commander Name
+      // If the viewer is a Manager/Admin, they are the commander
+      if (currentUser.role === 'Manager' || currentUser.role === 'Admin') {
+        setCommanderName(currentUser.fullName);
+      } else {
+        // Otherwise use the employee's manager
+        setCommanderName(reviewedUser.managerName || '');
+      }
+
+      // Fetch Template HTML
+      if (period?.templateId) {
+        const tplRes = await api.get(`/templates/${period.templateId}/preview`);
+        setTemplateHtml(tplRes.data.html);
+      }
+
+      // Prepopulate existing review data if any
+      if (period?.Reviews?.[0]) {
+        const review = period.Reviews[0];
+        setTotalScore(review.selfScore || 0);
+        
+        if (review.status && review.status !== 'Draft') {
+          setIsSubmitted(true);
+        }
+        
+        try {
+          const parsedFeedback = typeof review.feedback === 'string' ? JSON.parse(review.feedback) : (review.feedback || {});
+          // If we have a saved commander name in feedback, use it
+          if (parsedFeedback.commander) {
+            setCommanderName(parsedFeedback.commander);
+          }
+          
+          // Wait for next tick so dangerouslySetInnerHTML mounts
+          setTimeout(() => {
+             if (formRef.current && parsedFeedback.tableData) {
+                const scoreInputs = formRef.current.querySelectorAll('.score-input');
+                const noteInputs = formRef.current.querySelectorAll('.note-input');
+                
+                parsedFeedback.tableData.scores?.forEach((val, i) => {
+                  if (scoreInputs[i]) scoreInputs[i].value = val;
+                });
+                parsedFeedback.tableData.notes?.forEach((val, i) => {
+                  if (noteInputs[i]) noteInputs[i].value = val;
+                });
+                
+                calculateTree();
+             }
+          }, 100);
+        } catch(e) {}
+      }
+    } catch (err) {
+      console.error('[FETCH-DATA-ERROR]', err);
+      toast.error('Lỗi tải dữ liệu: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const calculateTree = () => {
+    if (!formRef.current) return;
+    const inputs = Array.from(formRef.current.querySelectorAll('.score-input'));
+    
+    // 1. Identify which inputs are parents (they have children pointing to them)
+    const parentIds = new Set();
+    inputs.forEach(input => {
+      const parentId = input.getAttribute('data-parent-id');
+      if (parentId && parentId !== 'root') {
+        parentIds.add(parentId);
+      }
+    });
+
+    // 2. Mark parents as readonly to prevent manual overriding of calculated sums
+    inputs.forEach(input => {
+      const id = input.getAttribute('data-id');
+      if (parentIds.has(id)) {
+        if (!input.readOnly) {
+          input.readOnly = true;
+          input.placeholder = "...";
+        }
+      }
+    });
+
+    // 3. Recursive function to calculate and update node values
+    const getValue = (nodeId) => {
+      const nodeInput = inputs.find(i => i.getAttribute('data-id') === nodeId);
+      if (!nodeInput) return 0;
+
+      const children = inputs.filter(i => i.getAttribute('data-parent-id') === nodeId);
+      if (children.length > 0) {
+        let sum = 0;
+        children.forEach(child => {
+          sum += getValue(child.getAttribute('data-id'));
+        });
+        nodeInput.value = sum; // Update parent's DOM
+        return sum;
+      } else {
+        return Number(nodeInput.value) || 0;
+      }
+    };
+
+    // 4. Calculate final total from all root-level nodes
+    const rootChildren = inputs.filter(i => i.getAttribute('data-parent-id') === 'root');
+    let total = 0;
+    rootChildren.forEach(child => {
+       const val = getValue(child.getAttribute('data-id'));
+       const row = child.closest('tr');
+       const firstCellText = row?.querySelector('td')?.textContent.trim().toUpperCase() || '';
+       
+       // Deduct penalty section (III)
+       if (firstCellText === 'III') {
+         total -= val;
+       } else {
+         total += val;
+       }
+    });
+    
+    setTotalScore(total);
+  };
+
+  const handleTableInput = (e) => {
+    if (isReadOnly) {
+       e.preventDefault();
+       return;
+    }
+    
+    if (e.target.classList.contains('score-input')) {
+      // Allow only positive integers
+      const oldVal = e.target.value;
+      const newVal = oldVal.replace(/[^0-9]/g, '');
+      if (oldVal !== newVal) {
+        e.target.value = newVal;
+      }
+      
+      calculateTree();
+    }
+  };
+
+  const handleTableKeyDown = (e) => {
+    if (isReadOnly) return;
+    const target = e.target;
+    if (target.tagName.toLowerCase() !== 'input' || target.readOnly) return;
+
+    const isScore = target.classList.contains('score-input');
+    
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const colInputs = Array.from(formRef.current.querySelectorAll(`input.${isScore ? 'score-input' : 'note-input'}:not([readonly])`));
+      const colIndex = colInputs.indexOf(target);
+      if (colIndex === -1) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (colIndex < colInputs.length - 1) colInputs[colIndex + 1].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (colIndex > 0) colInputs[colIndex - 1].focus();
+      }
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      let atStart = true;
+      let atEnd = true;
+      try {
+        atStart = target.selectionStart === 0;
+        atEnd = target.selectionStart === target.value.length;
+      } catch (err) {
+        // type="number" throws error on selectionStart, we just let it jump immediately
+      }
+
+      if ((e.key === 'ArrowRight' && atEnd) || (e.key === 'ArrowLeft' && atStart)) {
+        const allInputs = Array.from(formRef.current.querySelectorAll('input:not([readonly])'));
+        const allIndex = allInputs.indexOf(target);
+        if (allIndex === -1) return;
+
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          if (allIndex < allInputs.length - 1) allInputs[allIndex + 1].focus();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (allIndex > 0) allInputs[allIndex - 1].focus();
+        }
+      }
+    }
+  };
+
+  const classifyScore = (score) => {
+    if (score >= 90) return 'Xuất sắc';
+    if (score >= 75) return 'Hoàn thành tốt';
+    if (score >= 60) return 'Hoàn thành';
+    return 'Không hoàn thành';
+  };
+
+  const handleSubmit = async () => {
+    // Extract DOM data
+    const tableData = { scores: [], notes: [] };
+    if (formRef.current) {
+       const scoreInputs = formRef.current.querySelectorAll('.score-input');
+       const noteInputs = formRef.current.querySelectorAll('.note-input');
+       scoreInputs.forEach(i => tableData.scores.push(i.value));
+       noteInputs.forEach(i => tableData.notes.push(i.value));
+    }
+
+    try {
+      await api.post('/reviews/submit-personal', {
+        reviewPeriodId: period.id,
+        templateId: period.templateId,
+        score: totalScore,
+        feedback: { 
+           commander: commanderName, 
+           tableData, 
+           classification: classifyScore(totalScore) 
+        }
+      });
+      toast.success('Đã nộp đánh giá cá nhân thành công!');
+      if (onBack) onBack();
+    } catch (err) {
+      toast.error('Lỗi nộp đánh giá: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const exportDocx = async () => {
+    let scores = [];
+    let notes = [];
+
+    // Strategy: Get data from the SAVED review (most reliable) or from DOM inputs as fallback
+    if (period?.Reviews?.[0]?.feedback) {
+      try {
+        const parsedFeedback = typeof period.Reviews[0].feedback === 'string' 
+          ? JSON.parse(period.Reviews[0].feedback) 
+          : (period.Reviews[0].feedback || {});
+        
+        if (parsedFeedback.tableData) {
+          scores = parsedFeedback.tableData.scores || [];
+          notes = parsedFeedback.tableData.notes || [];
+        }
+      } catch (e) {
+        console.warn('[EXPORT] Could not parse saved feedback, falling back to DOM', e);
+      }
+    }
+    
+    // Fallback: read from DOM if no saved data
+    if (scores.length === 0 && formRef.current) {
+      const scoreInputs = formRef.current.querySelectorAll('.score-input');
+      const noteInputs = formRef.current.querySelectorAll('.note-input');
+      scores = Array.from(scoreInputs).map(i => i.value);
+      notes = Array.from(noteInputs).map(i => i.value);
+    }
+
+    console.log('[EXPORT-DOCX-FE] profile:', profile);
+    console.log('[EXPORT-DOCX-FE] employeeProfile:', employeeProfile);
+
+    try {
+      const toastId = toast.info('Đang tạo file Word từ biểu mẫu gốc...', { autoClose: false });
+      
+      const payload = {
+        templateId: period?.templateId,
+        scores,
+        notes,
+        totalScore,
+        metadata: {
+          fullName: employeeProfile?.fullName || profile?.fullName,
+          rank: employeeProfile?.rank || profile?.rank,
+          position: employeeProfile?.position || profile?.position,
+          teamName: employeeProfile?.Team?.shortName || 
+                    employeeProfile?.Team?.name || 
+                    employeeProfile?.teamName || 
+                    profile?.Team?.shortName || 
+                    profile?.Team?.name || 
+                    profile?.teamName || '',
+          month: period?.name?.match(/Tháng\s+(\d+)/)?.[1] || new Date().getMonth() + 1,
+          year: period?.name?.match(/(\d{4})/)?.[1] || new Date().getFullYear(),
+          classification: classifyScore(totalScore),
+          commander: commanderName || period?.Reviews?.[0]?.feedback?.commander || ''
+        }
+      };
+      console.log('[EXPORT-DOCX-FE] Team Name to Export:', payload.metadata.teamName);
+      console.log('[EXPORT-DOCX-FE] Final Metadata:', payload.metadata);
+      console.log('[EXPORT-DOCX-FE] payload:', payload);
+
+      const response = await api.post('/reviews/export-draft-docx', payload, { responseType: 'blob' });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Ban_Danh_Gia_${profile?.fullName || 'NhanVien'}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.dismiss(toastId);
+      toast.success('Xuất file thành công!');
+    } catch (err) {
+      toast.error('Lỗi xuất file docx: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const showSubmitConfirm = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Nộp Đánh Giá',
+      message: 'Bạn có chắc chắn muốn gửi đánh giá cá nhân? Bạn sẽ không thể sửa đổi sau khi Quản lý đã duyệt.',
+      type: 'warning',
+      onConfirm: handleSubmit
+    });
+  };
+
+  if (isLoading) {
+    return <div className="p-12 text-center text-slate-500 font-medium animate-pulse">Đang chuẩn bị biểu mẫu...</div>;
+  }
+
+  if (!period) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center mt-4">
+        <CheckCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-slate-800">Không có dữ liệu kỳ đánh giá</h2>
+      </div>
+    );
+  }
+
+  const reviewMonth = new Date(period.endDate).getMonth() + 1;
+  const reviewYear = new Date(period.endDate).getFullYear();
+  let teamName = profile?.Team?.shortName || profile?.Team?.name || '';
+  // Strip redundant "Đội"
+  teamName = teamName.replace(/^Đội\s+/i, '');
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in duration-300">
+      <style>{DOCX_PREVIEW_STYLES}</style>
+      
+      {/* Form Header Action Bar */}
+      <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+        <button 
+          onClick={onBack}
+          className="text-slate-600 hover:text-blue-600 flex items-center gap-2 font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-50"
+        >
+          <ArrowLeft className="w-4 h-4" /> Quay lại danh sách
+        </button>
+        <div className="flex items-center gap-3 text-sm">
+          {isReadOnly && <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-md font-bold text-xs uppercase tracking-wider border border-slate-200">Chế độ xem</span>}
+        </div>
+      </div>
+
+      <div className="p-0 sm:p-6 lg:p-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Header Layout based on Admin Preview */}
+          <div className="pb-6 mb-6 border-b-2 border-dashed border-slate-200">
+            <div className="flex justify-between items-start text-sm text-slate-800 mb-6">
+              <div className="text-center font-bold">
+                <p>PHÒNG AN NINH MẠNG VÀ PCTP</p>
+                <p>SỬ DỤNG CÔNG NGHỆ CAO</p>
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <span>ĐỘI</span>
+                  <input type="text" readOnly className={`${inputClass} w-32 text-center text-blue-700 font-bold`} value={' ' + teamName} />
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                <p className="font-semibold underline underline-offset-4">Độc lập – Tự do – Hạnh phúc</p>
+              </div>
+            </div>
+            
+            <div className="text-center mb-6">
+              <p className="font-bold text-blue-900 text-xl mb-1">BẢNG CHẤM ĐIỂM</p>
+              <p className="text-sm text-slate-600 font-medium">Đánh giá kết quả thực hiện nhiệm vụ của Cán bộ chiến sĩ</p>
+              <div className="flex items-center justify-center gap-2 mt-3 text-sm font-semibold text-slate-800">
+                <span>Tháng</span>
+                <input type="text" readOnly className={`${inputClass} w-12 text-center text-blue-700`} value={' ' + reviewMonth} />
+                <span>năm</span>
+                <input type="text" readOnly className={`${inputClass} w-16 text-center text-blue-700`} value={' ' + reviewYear} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-4 text-sm px-4">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-600 whitespace-nowrap">Họ và tên:</span>
+                <input type="text" readOnly className={`${inputClass} flex-1 text-blue-700 font-bold`} value={' ' + (profile?.fullName || '')} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-600 whitespace-nowrap">Cấp bậc - Chức vụ:</span>
+                <input type="text" readOnly className={`${inputClass} flex-1 text-blue-700 font-bold`} value={' ' + `${profile?.rank || ''} - ${profile?.position || ''}`} />
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Table from DOCX */}
+          <div 
+            ref={formRef}
+            className={`docx-preview overflow-x-auto pb-4 ${isReadOnly ? 'pointer-events-none opacity-90' : ''}`} 
+            onInput={handleTableInput}
+            onKeyDown={handleTableKeyDown}
+          />
+
+          {/* Footer Layout based on Admin Preview */}
+          <div className="pt-6 mt-4 border-t-2 border-dashed border-slate-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between text-sm mb-8 gap-4 px-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="flex items-center gap-3">
+                <span className="font-bold text-slate-800 uppercase tracking-wider">Tổng điểm:</span>
+                <input type="text" readOnly className={`${inputClass} w-24 text-center font-bold text-2xl text-blue-600 border-b-2`} value={totalScore} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-bold text-slate-800 uppercase tracking-wider">Xếp loại:</span>
+                <input type="text" readOnly className={`${inputClass} w-48 font-bold text-lg text-emerald-600 border-b-2`} value={classifyScore(totalScore)} />
+              </div>
+            </div>
+            
+            <div className="flex justify-end text-sm text-slate-800 px-4 mt-6">
+              <div className="text-center w-64">
+                <p className="font-bold mb-1">CHỈ HUY ĐỘI</p>
+                <p className="text-slate-500 italic mb-12">(Ký, ghi rõ họ tên)</p>
+                <input 
+                  type="text" 
+                  readOnly={isReadOnly}
+                  value={commanderName}
+                  onChange={e => setCommanderName(e.target.value)}
+                  placeholder="Nhập họ tên chỉ huy..."
+                  className="w-full text-center font-semibold text-slate-800 border-b border-slate-300 focus:border-blue-500 outline-none pb-1 bg-transparent transition-colors placeholder:font-normal placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Scoring Rules Guide */}
+          <div className="mt-10 bg-amber-50/50 border border-amber-200/60 rounded-xl p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900 space-y-2">
+                <p className="font-bold text-amber-800">Quy tắc chấm điểm (Tham khảo):</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 mt-2 text-xs">
+                  <p>• Từ 90 điểm trở lên: <strong className="text-emerald-700">Xuất sắc</strong></p>
+                  <p>• Từ 75 – 89 điểm: <strong className="text-blue-700">Hoàn thành tốt</strong></p>
+                  <p>• Từ 60 – 74 điểm: <strong className="text-amber-700">Hoàn thành</strong></p>
+                  <p>• Dưới 60 điểm: <strong className="text-red-600">Không hoàn thành</strong></p>
+                </div>
+                <p className="text-amber-700/70 mt-3 text-xs italic">* Vui lòng điền điểm vào các ô trong bảng trên. Tổng điểm sẽ được hệ thống tự động tính toán.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row justify-end gap-3 mt-4">
+        <button onClick={exportDocx} className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+          <Download className="w-4 h-4" /> {isReadOnly ? 'Xuất bản đánh giá (Word)' : 'Xuất nháp (Word)'}
+        </button>
+        {!isReadOnly && (
+          <button onClick={showSubmitConfirm} className="px-8 py-2.5 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-200">
+            <Save className="w-4 h-4" /> Lưu & Nộp bản đánh giá
+          </button>
+        )}
+      </div>
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+      />
+    </div>
+  );
+};
+
+export default SelfReviewForm;
+
