@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
 import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info } from 'lucide-react';
@@ -10,20 +10,40 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const { user: currentUser } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
-  const [teamData, setTeamData] = useState([]);
-  const [periods, setPeriods] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [selectedPeriodId, setSelectedPeriodId] = useState(propPeriodId || '');
-  const [selectedDeptId, setSelectedDeptId] = useState('all');
-  const [selectedTeamId, setSelectedTeamId] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [activePeriod, setActivePeriod] = useState(null);
+  const [periods, setPeriods] = useState([]);
+  const [teamData, setTeamData] = useState([]);
+  const [stats, setStats] = useState({ total: 0, notStarted: 0, submitted: 0, managerReviewed: 0, completed: 0 });
   const [selectedReview, setSelectedReview] = useState(null);
   const [editScore, setEditScore] = useState('');
-  const [editFeedback, setEditFeedback] = useState('');
-  const [stats, setStats] = useState({ total: 0, notStarted: 0, submitted: 0, managerReviewed: 0, completed: 0 });
+  const [editFeedback, setEditFeedback] = useState({ managerNote: '', commander: '' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedPeriodId, setSelectedPeriodId] = useState(propPeriodId || '');
+  const [selectedTeamId, setSelectedTeamId] = useState('all');
+  const [selectedDeptId, setSelectedDeptId] = useState('all');
+  const [departments, setDepartments] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportYear, setExportYear] = useState(new Date().getFullYear());
+  const [exportTeamId, setExportTeamId] = useState('all');
+
+  const reviewPeriodProps = useMemo(() => {
+    if (!activePeriod || !selectedReview) return null;
+    return { ...activePeriod, Reviews: [selectedReview] };
+  }, [activePeriod, selectedReview]);
+
+  const availableYears = useMemo(() => {
+    if (!periods || periods.length === 0) return [new Date().getFullYear()];
+    const years = periods.map(p => new Date(p.endDate).getFullYear());
+    return [...new Set(years)].sort((a, b) => b - a);
+  }, [periods]);
+
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(parseInt(exportYear))) {
+      setExportYear(availableYears[0]);
+    }
+  }, [availableYears]);
 
   useEffect(() => {
     fetchInitialData();
@@ -102,18 +122,75 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     setEditFeedback(fb);
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (formData = {}) => {
+    // Collect latest table data from the DOM
+    const tableData = { scores: [], notes: [] };
+    const formEl = document.querySelector('.docx-preview');
+    if (formEl) {
+       const scoreInputs = formEl.querySelectorAll('.score-input');
+       const noteInputs = formEl.querySelectorAll('.note-input');
+       scoreInputs.forEach(i => tableData.scores.push(i.value));
+       noteInputs.forEach(i => tableData.notes.push(i.value));
+    }
+
+    const finalFeedback = {
+       ...editFeedback,
+       tableData, // Save the manager's edited scores/notes from the table
+       commander: editFeedback.commander // Preserve commander name
+    };
+
     try {
       await api.put(`/reviews/${selectedReview.id}/approve`, {
-        status: 'ManagerReviewed',
+        status: 'Reviewed',
         score: editScore,
-        feedback: editFeedback
+        feedback: finalFeedback
       });
       toast.success('Đã duyệt đánh giá thành công!');
       setSelectedReview(null);
       fetchTeamData(selectedPeriodId, pagination?.page || 1);
     } catch (err) {
       toast.error('Lỗi duyệt đánh giá: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleExportWord = async (member) => {
+    const review = member.ReviewsReceived?.[0];
+    if (!review) return;
+
+    try {
+      const feedbackData = typeof review.feedback === 'string' ? JSON.parse(review.feedback) : (review.feedback || {});
+      const tableData = feedbackData.tableData || { scores: [], notes: [] };
+      
+      const res = await api.post('/reviews/export-draft-docx', {
+        templateId: review.templateId,
+        scores: tableData.scores,
+        notes: tableData.notes,
+        totalScore: review.score,
+        metadata: {
+          fullName: member.fullName,
+          rank: member.rank,
+          position: member.position,
+          teamName: member.Team?.fullName || '',
+          month: new Date(activePeriod?.endDate).getMonth() + 1,
+          year: new Date(activePeriod?.endDate).getFullYear(),
+          classification: review.score >= 90 ? 'Hoàn thành xuất sắc nhiệm vụ' : 
+                          review.score >= 70 ? 'Hoàn thành tốt nhiệm vụ' :
+                          review.score >= 50 ? 'Hoàn thành nhiệm vụ' : 'Không hoàn thành nhiệm vụ',
+          commander: feedbackData.commander || ''
+        }
+      }, { responseType: 'blob' });
+
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Ban_Danh_Gia_${member.username}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Đang tải file Word...');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Lỗi xuất file: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -127,16 +204,23 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
 
   const handleExportExcel = async () => {
     try {
-      const response = await api.get(`/reviews/export-excel?periodId=${selectedPeriodId}`, {
+      toast.info('Đang tạo báo cáo Excel...');
+      let url = `/reviews/export-excel?year=${exportYear}`;
+      if (currentUser?.role === 'Admin' && exportTeamId !== 'all') {
+        url += `&teamId=${exportTeamId}`;
+      }
+      
+      const response = await api.get(url, {
         responseType: 'blob'
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Ket_qua_danh_gia_${activePeriod?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Thang'}.xlsx`);
+      link.href = blobUrl;
+      link.setAttribute('download', `Ket_qua_danh_gia_Nam_${exportYear}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      setShowExportModal(false);
     } catch (error) {
       toast.error('Lỗi xuất Excel: ' + (error.response?.data?.message || error.message));
     }
@@ -144,8 +228,9 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'Completed': return <CheckCircle className="w-4 h-4 text-emerald-500" />;
-      case 'ManagerReviewed': return <CheckCircle className="w-4 h-4 text-blue-500" />;
+      case 'Completed':
+      case 'ManagerReviewed': 
+      case 'Reviewed': return <CheckCircle className="w-4 h-4 text-emerald-500" />;
       case 'Submitted': return <Clock className="w-4 h-4 text-amber-500" />;
       default: return <AlertCircle className="w-4 h-4 text-slate-400" />;
     }
@@ -153,9 +238,10 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
 
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'Completed': return <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold border border-emerald-100">Hoàn tất</span>;
-      case 'ManagerReviewed': return <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold border border-blue-100">Chỉ huy đánh giá</span>;
-      case 'Submitted': return <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-bold border border-amber-100">Đã nộp</span>;
+      case 'Completed':
+      case 'ManagerReviewed':
+      case 'Reviewed': return <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold border border-emerald-100">Hoàn tất</span>;
+      case 'Submitted': return <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-bold border border-amber-100">Chờ phê duyệt</span>;
       default: return <span className="text-slate-500 bg-slate-50 px-2 py-0.5 rounded text-xs font-medium border border-slate-100">Chưa nộp</span>;
     }
   };
@@ -171,67 +257,18 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   }
 
   // Render Review Detail View
-  if (selectedReview) {
+  if (selectedReview && activePeriod) {
     return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-12">
-        {/* Full Document View (ReadOnly) */}
         <SelfReviewForm 
-          period={{...activePeriod, Reviews: [selectedReview]}}
+          period={reviewPeriodProps}
           employeeProfile={selectedReview.user}
           readOnly={true}
+          isManagerMode={currentUser.role !== 'Admin'}
+          onTotalScoreChange={(score) => setEditScore(score)}
+          onApprove={handleApprove}
           onBack={() => setSelectedReview(null)}
         />
-
-        {/* Manager Approval Panel */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative z-10">
-          <div className="bg-blue-50 border-b border-blue-100 p-4">
-            <h3 className="font-bold text-blue-900 flex items-center gap-2">
-              <FileSignature className="w-5 h-5 text-blue-600" />
-              Phê duyệt đánh giá nhân viên: {selectedReview.user.fullName}
-            </h3>
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Điểm phê duyệt cuối cùng <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={editScore}
-                  onChange={e => setEditScore(e.target.value)}
-                  className="w-full border-slate-300 rounded-xl p-4 pl-6 border-2 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-black text-blue-700 text-3xl transition-all shadow-inner"
-                />
-              </div>
-              <p className="text-xs text-slate-500 mt-2 font-medium bg-slate-50 p-2 rounded flex gap-2">
-                <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                Mặc định là tổng điểm nhân viên tự đánh giá. Chỉ huy có thể điều chỉnh lại thành điểm cuối cùng.
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Nhận xét của Chỉ huy</label>
-              <textarea
-                rows="4"
-                value={editFeedback?.managerNote || ''}
-                onChange={e => setEditFeedback({ ...editFeedback, managerNote: e.target.value })}
-                className="w-full border-slate-300 rounded-xl p-3 border-2 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
-                placeholder="Ghi chú ý kiến đánh giá, nhận xét ưu khuyết điểm..."
-              ></textarea>
-            </div>
-          </div>
-          <div className="bg-slate-50 p-5 border-t border-slate-200 flex justify-end gap-3">
-            <button 
-              onClick={() => setSelectedReview(null)} 
-              className="px-6 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors shadow-sm"
-            >
-              Quay lại danh sách
-            </button>
-            <button 
-              onClick={handleApprove} 
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-200 flex items-center gap-2"
-            >
-              <CheckCircle className="w-4 h-4" /> Lưu & Phê duyệt biểu mẫu
-            </button>
-          </div>
-        </div>
       </div>
     );
   }
@@ -247,9 +284,9 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           )}
           <div>
             <h2 className="text-lg font-bold text-slate-800 leading-tight">
-              {propPeriodId ? activePeriod?.name : 'Kết quả đánh giá theo Kỳ'}
+              {propPeriodId ? activePeriod?.name : 'Quản lý đánh giá'}
             </h2>
-            <p className="text-xs text-slate-500 font-medium">Bảng kết quả chi tiết từng cá nhân</p>
+            <p className="text-xs text-slate-500 font-medium">Theo dõi tiến độ và phê duyệt biểu mẫu</p>
           </div>
         </div>
 
@@ -266,14 +303,12 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {selectedPeriodId && (
-              <button 
-                onClick={handleExportExcel}
-                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-sm shadow-emerald-200 hover:bg-emerald-700 transition-colors"
-              >
-                <Download className="w-4 h-4" /> Xuất báo cáo Excel
-              </button>
-            )}
+            <button 
+              onClick={() => setShowExportModal(true)}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-sm shadow-emerald-200 hover:bg-emerald-700 transition-colors"
+            >
+              <Download className="w-4 h-4" /> Xuất báo cáo Excel
+            </button>
 
             {currentUser?.role === 'Admin' && (
               <div className="relative">
@@ -291,20 +326,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
               </div>
             )}
 
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <select 
-                value={selectedStatus} 
-                onChange={(e) => { setSelectedStatus(e.target.value); setPagination(prev => ({...prev, page: 1})); }}
-                className="pl-9 pr-8 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer bg-white"
-              >
-                <option value="">Trạng thái: Tất cả</option>
-                <option value="Draft">Chưa nộp</option>
-                <option value="Submitted">Đã nộp</option>
-                <option value="ManagerReviewed">Chỉ huy đánh giá</option>
-                <option value="Completed">Hoàn tất</option>
-              </select>
-            </div>
+
 
             {!propPeriodId && (
               <div className="relative">
@@ -326,26 +348,53 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><UsersIcon className="w-5 h-5" /></div>
-          <div><p className="text-xs text-slate-500 font-medium">Tổng nhân sự</p><p className="text-xl font-bold text-slate-800">{stats.total}</p></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div 
+          onClick={() => { setSelectedStatus(''); setPagination(prev => ({...prev, page: 1})); }}
+          className={`cursor-pointer p-4 rounded-2xl shadow-sm border transition-all flex items-center gap-4 ${
+            selectedStatus === '' 
+            ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-200' 
+            : 'bg-white border-slate-200 text-slate-800 hover:border-blue-300'
+          }`}
+        >
+          <div className={`p-3 rounded-xl ${selectedStatus === '' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'}`}><UsersIcon className="w-5 h-5" /></div>
+          <div><p className={`text-xs font-medium ${selectedStatus === '' ? 'text-blue-100' : 'text-slate-500'}`}>Tổng nhân sự</p><p className="text-xl font-bold">{stats.total}</p></div>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="bg-slate-50 p-3 rounded-xl text-slate-600"><AlertCircle className="w-4 h-4" /></div>
-          <div><p className="text-xs text-slate-500 font-medium">Chưa nộp</p><p className="text-xl font-bold text-slate-600">{stats.notStarted}</p></div>
+
+        <div 
+          onClick={() => { setSelectedStatus('Draft'); setPagination(prev => ({...prev, page: 1})); }}
+          className={`cursor-pointer p-4 rounded-2xl shadow-sm border transition-all flex items-center gap-4 ${
+            selectedStatus === 'Draft' 
+            ? 'bg-slate-700 border-slate-700 text-white shadow-md shadow-slate-200' 
+            : 'bg-white border-slate-200 text-slate-800 hover:border-slate-400'
+          }`}
+        >
+          <div className={`p-3 rounded-xl ${selectedStatus === 'Draft' ? 'bg-white/20 text-white' : 'bg-slate-50 text-slate-600'}`}><AlertCircle className="w-4 h-4" /></div>
+          <div><p className={`text-xs font-medium ${selectedStatus === 'Draft' ? 'text-slate-200' : 'text-slate-500'}`}>Chưa nộp</p><p className="text-xl font-bold">{stats.notStarted}</p></div>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="bg-amber-50 p-3 rounded-xl text-amber-600"><Clock className="w-4 h-4" /></div>
-          <div><p className="text-xs text-slate-500 font-medium">Đã nộp</p><p className="text-xl font-bold text-amber-600">{stats.submitted}</p></div>
+
+        <div 
+          onClick={() => { setSelectedStatus('Submitted'); setPagination(prev => ({...prev, page: 1})); }}
+          className={`cursor-pointer p-4 rounded-2xl shadow-sm border transition-all flex items-center gap-4 ${
+            selectedStatus === 'Submitted' 
+            ? 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-200' 
+            : 'bg-white border-slate-200 text-slate-800 hover:border-amber-300'
+          }`}
+        >
+          <div className={`p-3 rounded-xl ${selectedStatus === 'Submitted' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-600'}`}><Clock className="w-4 h-4" /></div>
+          <div><p className={`text-xs font-medium ${selectedStatus === 'Submitted' ? 'text-amber-50' : 'text-slate-500'}`}>Chờ phê duyệt</p><p className="text-xl font-bold">{stats.submitted}</p></div>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600"><FileSignature className="w-4 h-4" /></div>
-          <div><p className="text-xs text-slate-500 font-medium">Chỉ huy duyệt</p><p className="text-xl font-bold text-indigo-600">{stats.managerReviewed}</p></div>
-        </div>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="bg-emerald-50 p-3 rounded-xl text-emerald-600"><CheckCircle className="w-4 h-4" /></div>
-          <div><p className="text-xs text-slate-500 font-medium">Hoàn tất</p><p className="text-xl font-bold text-emerald-600">{stats.completed}</p></div>
+
+        <div 
+          onClick={() => { setSelectedStatus('Reviewed'); setPagination(prev => ({...prev, page: 1})); }}
+          className={`cursor-pointer p-4 rounded-2xl shadow-sm border transition-all flex items-center gap-4 ${
+            selectedStatus === 'Reviewed' || selectedStatus === 'Completed'
+            ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-200' 
+            : 'bg-white border-slate-200 text-slate-800 hover:border-emerald-300'
+          }`}
+        >
+          <div className={`p-3 rounded-xl ${selectedStatus === 'Reviewed' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-600'}`}><CheckCircle className="w-4 h-4" /></div>
+          <div><p className={`text-xs font-medium ${selectedStatus === 'Reviewed' ? 'text-emerald-100' : 'text-slate-500'}`}>Hoàn tất</p><p className="text-xl font-bold">{stats.completed}</p></div>
         </div>
       </div>
 
@@ -410,12 +459,24 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       {review ? (
-                        <button
-                          onClick={() => openReviewModal(member)}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
-                        >
-                          <Eye className="w-4 h-4" /> Xem & Duyệt
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          {(review.status === 'Reviewed' || review.status === 'Completed') && (
+                            <button
+                              onClick={() => handleExportWord(member)}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-sm font-medium transition-colors"
+                              title="Xuất file Word"
+                            >
+                              <Download className="w-4 h-4" /> Xuất Word
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openReviewModal(member)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            <Eye className="w-4 h-4" /> 
+                            {currentUser.role === 'Admin' || review.status === 'Reviewed' || review.status === 'Completed' ? 'Xem' : 'Xem & Duyệt'}
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-slate-400 text-sm italic">Chưa nộp</span>
                       )}
@@ -452,6 +513,67 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           </div>
         </div>
       </div>
+
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+                  <FileSignature className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">Xuất báo cáo Excel</h3>
+              </div>
+              <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Chọn năm xuất báo cáo</label>
+                <select 
+                  value={exportYear}
+                  onChange={(e) => setExportYear(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm appearance-none bg-white cursor-pointer"
+                >
+                  {availableYears.map(year => (
+                    <option key={year} value={year}>Năm {year}</option>
+                  ))}
+                </select>
+              </div>
+
+              {currentUser?.role === 'Admin' && (
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Chọn Đội (Dành cho Admin)</label>
+                  <select 
+                    value={exportTeamId} 
+                    onChange={(e) => setExportTeamId(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm"
+                  >
+                    <option value="all">Tất cả các Đội</option>
+                    {departments.map(d => (
+                      <option key={d.id} value={d.id}>{d.fullName}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setShowExportModal(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-xl transition-colors">
+                Hủy
+              </button>
+              <button 
+                onClick={handleExportExcel} 
+                className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Xuất file
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

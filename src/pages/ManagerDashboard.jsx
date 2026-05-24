@@ -4,6 +4,7 @@ import { Users, FileSignature, LogOut, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 import TeamReview from '../components/manager/TeamReview';
+import TeamTracking from '../components/manager/TeamTracking';
 import Profile from '../components/common/Profile';
 
 const ManagerDashboard = () => {
@@ -12,6 +13,7 @@ const ManagerDashboard = () => {
 
   const tabs = [
     { id: 'team-tracking', label: 'Theo dõi Đội', icon: Users },
+    { id: 'evaluations', label: 'Quản lý đánh giá', icon: FileSignature },
     { id: 'profile', label: 'Hồ sơ cá nhân', icon: UserIcon },
   ];
 
@@ -69,7 +71,8 @@ const ManagerDashboard = () => {
       <main className="flex-1 overflow-y-auto bg-slate-50">
         <div className="p-6 max-w-7xl mx-auto">
            <Routes>
-              <Route path="team-tracking" element={<TeamReview />} />
+              <Route path="team-tracking" element={<TeamTracking />} />
+              <Route path="evaluations" element={<TeamReview />} />
               <Route path="profile" element={<Profile />} />
               <Route path="*" element={<Navigate to="team-tracking" replace />} />
            </Routes>

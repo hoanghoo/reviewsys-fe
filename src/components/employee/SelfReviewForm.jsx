@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from '../../context/ToastContext';
 import api from '../../lib/axios';
 import { Save, Download, CheckCircle, ArrowLeft, Info, Search } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../common/ConfirmModal';
 
 const DOCX_PREVIEW_STYLES = `
@@ -30,7 +31,8 @@ const DOCX_PREVIEW_STYLES = `
 
 const inputClass = "h-7 border-b border-slate-300 bg-transparent outline-none px-1.5 text-slate-800 font-semibold focus:border-blue-500 transition-colors placeholder:font-normal placeholder:text-slate-400";
 
-const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
+export default function SelfReviewForm({ period, onBack, employeeProfile = null, readOnly = false, isManagerMode = false, onTotalScoreChange, onApprove }) {
+  const { user: currentUserProfile } = useAuth();
   const toast = useToast();
   const formRef = useRef(null);
   
@@ -42,37 +44,70 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
   const [commanderName, setCommanderName] = useState('');
   const [totalScore, setTotalScore] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState('');
   
-  const isReadOnly = readOnly || isSubmitted;
+  const isReadOnly = (readOnly || isSubmitted) && !isManagerMode;
 
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
 
+  const reviewId = period?.Reviews?.[0]?.id;
+  const periodId = period?.id;
+  const targetUserId = employeeProfile?.id;
+
   useEffect(() => {
     fetchData();
-  }, [period, employeeProfile]);
+  }, [periodId, reviewId, targetUserId]);
 
-  // Manually inject HTML to prevent React from wiping DOM input values on re-render
+  // Manually inject HTML and configure inputs - only run when template or basic state changes
   useEffect(() => {
     if (formRef.current && !isLoading) {
       if (templateHtml) {
-        formRef.current.innerHTML = templateHtml;
+        // IMPORTANT: We only want to inject if it's currently empty or the template itself changed
+        // This prevents wiping out user input on re-renders caused by score updates
+        if (!formRef.current.innerHTML || formRef.current.getAttribute('data-template-id') !== period?.templateId) {
+          formRef.current.innerHTML = templateHtml;
+          formRef.current.setAttribute('data-template-id', period?.templateId);
+          
+          // Initial configuration of inputs
+          const allInputs = formRef.current.querySelectorAll('input.score-input, input.note-input');
+          allInputs.forEach(input => {
+            input.readOnly = isReadOnly;
+            if (isReadOnly) {
+              input.classList.add('bg-slate-50', 'cursor-not-allowed');
+            } else {
+              input.classList.remove('bg-slate-50', 'cursor-not-allowed');
+            }
+          });
+        }
       } else {
         formRef.current.innerHTML = '<p class="text-center text-slate-500 py-10">Không tìm thấy nội dung biểu mẫu.</p>';
       }
     }
-  }, [templateHtml, isLoading]);
+  }, [templateHtml, isLoading, isReadOnly, period?.templateId]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      // Fetch user profile if not provided
-      let currentProfile = employeeProfile;
-      if (!currentProfile) {
-        const profileRes = await api.get('/users/profile');
-        currentProfile = profileRes.data;
+      
+      // 1. Fetch CURRENT logged in user (who is viewing this form)
+      const currentUserRes = await api.get('/users/profile');
+      const currentUser = currentUserRes.data;
+
+      // 2. Determine whose review this is
+      let reviewedUser = employeeProfile;
+      if (!reviewedUser) {
+        reviewedUser = currentUser;
       }
-      setProfile(currentProfile);
-      setCommanderName(currentProfile.managerName || '');
+      setProfile(reviewedUser);
+
+      // 3. Determine Commander Name
+      // If the viewer is a Manager/Admin, they are the commander
+      if (currentUser.role === 'Manager' || currentUser.role === 'Admin') {
+        setCommanderName(currentUser.fullName);
+      } else {
+        // Otherwise use the employee's manager
+        setCommanderName(reviewedUser.managerName || '');
+      }
 
       // Fetch Template HTML
       if (period?.templateId) {
@@ -84,6 +119,7 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
       if (period?.Reviews?.[0]) {
         const review = period.Reviews[0];
         setTotalScore(review.selfScore || 0);
+        setReviewStatus(review.status || '');
         
         if (review.status && review.status !== 'Draft') {
           setIsSubmitted(true);
@@ -91,7 +127,10 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
         
         try {
           const parsedFeedback = typeof review.feedback === 'string' ? JSON.parse(review.feedback) : (review.feedback || {});
-          setCommanderName(parsedFeedback.commander || profileRes.data.managerName || '');
+          // If we have a saved commander name in feedback, use it
+          if (parsedFeedback.commander) {
+            setCommanderName(parsedFeedback.commander);
+          }
           
           // Wait for next tick so dangerouslySetInnerHTML mounts
           setTimeout(() => {
@@ -112,6 +151,7 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
         } catch(e) {}
       }
     } catch (err) {
+      console.error('[FETCH-DATA-ERROR]', err);
       toast.error('Lỗi tải dữ liệu: ' + (err.response?.data?.message || err.message));
     } finally {
       setIsLoading(false);
@@ -177,6 +217,9 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
     });
     
     setTotalScore(total);
+    if (onTotalScoreChange) {
+      onTotalScoreChange(total);
+    }
   };
 
   const handleTableInput = (e) => {
@@ -278,53 +321,65 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
   };
 
   const exportDocx = async () => {
-    if (!formRef.current) {
-      toast.error("Không tìm thấy nội dung biểu mẫu.");
-      return;
+    let scores = [];
+    let notes = [];
+
+    // Strategy: Get data from the SAVED review (most reliable) or from DOM inputs as fallback
+    if (period?.Reviews?.[0]?.feedback) {
+      try {
+        const parsedFeedback = typeof period.Reviews[0].feedback === 'string' 
+          ? JSON.parse(period.Reviews[0].feedback) 
+          : (period.Reviews[0].feedback || {});
+        
+        if (parsedFeedback.tableData) {
+          scores = parsedFeedback.tableData.scores || [];
+          notes = parsedFeedback.tableData.notes || [];
+        }
+      } catch (e) {
+        console.warn('[EXPORT] Could not parse saved feedback, falling back to DOM', e);
+      }
+    }
+    
+    // Fallback: read from DOM if no saved data
+    if (scores.length === 0 && formRef.current) {
+      const scoreInputs = formRef.current.querySelectorAll('.score-input');
+      const noteInputs = formRef.current.querySelectorAll('.note-input');
+      scores = Array.from(scoreInputs).map(i => i.value);
+      notes = Array.from(noteInputs).map(i => i.value);
     }
 
-    // Clone the form so we can replace inputs with text
-    const clone = formRef.current.cloneNode(true);
-    const inputs = clone.querySelectorAll('input');
-    inputs.forEach(input => {
-      const val = input.value || '';
-      const textNode = document.createTextNode(val);
-      if (input.parentNode) {
-        input.parentNode.replaceChild(textNode, input);
-      }
-    });
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt; }
-          th, td { border: 1px solid black; padding: 5px; vertical-align: top; }
-          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
-          .text-center { text-align: center; }
-          .font-bold { font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <h2 style="text-align:center; font-family: Arial, sans-serif;">BẢNG CHẤM ĐIỂM</h2>
-        <p style="text-align:center; font-family: Arial, sans-serif;">Đánh giá kết quả thực hiện nhiệm vụ của Cán bộ chiến sĩ</p>
-        <p style="font-family: Arial, sans-serif;"><strong>Họ và tên:</strong> ${profile?.fullName || ''}</p>
-        <p style="font-family: Arial, sans-serif;"><strong>Đội:</strong> ${profile?.Team?.shortName || profile?.Team?.fullName || ''}</p>
-        <p style="font-family: Arial, sans-serif;"><strong>Cấp bậc - Chức vụ:</strong> ${profile?.rank || ''} - ${profile?.position || ''}</p>
-        <br/>
-        ${clone.innerHTML}
-        <br/>
-        <p style="font-family: Arial, sans-serif; font-size: 12pt;"><strong>Tổng điểm: ${totalScore}</strong></p>
-        <p style="font-family: Arial, sans-serif; font-size: 12pt;"><strong>Xếp loại: ${classifyScore(totalScore)}</strong></p>
-      </body>
-      </html>
-    `;
+    console.log('[EXPORT-DOCX-FE] profile:', profile);
+    console.log('[EXPORT-DOCX-FE] employeeProfile:', employeeProfile);
 
     try {
-      const toastId = toast.info('Đang tạo file Word...', { autoClose: false });
-      const response = await api.post('/reviews/export-draft-docx', { html: htmlContent }, { responseType: 'blob' });
+      const toastId = toast.info('Đang tạo file Word từ biểu mẫu gốc...', { autoClose: false });
+      
+      const payload = {
+        templateId: period?.templateId,
+        scores,
+        notes,
+        totalScore,
+        metadata: {
+          fullName: employeeProfile?.fullName || profile?.fullName,
+          rank: employeeProfile?.rank || profile?.rank,
+          position: employeeProfile?.position || profile?.position,
+          teamName: employeeProfile?.Team?.shortName || 
+                    employeeProfile?.Team?.name || 
+                    employeeProfile?.teamName || 
+                    profile?.Team?.shortName || 
+                    profile?.Team?.name || 
+                    profile?.teamName || '',
+          month: period?.name?.match(/Tháng\s+(\d+)/)?.[1] || new Date().getMonth() + 1,
+          year: period?.name?.match(/(\d{4})/)?.[1] || new Date().getFullYear(),
+          classification: classifyScore(totalScore),
+          commander: commanderName || period?.Reviews?.[0]?.feedback?.commander || ''
+        }
+      };
+      console.log('[EXPORT-DOCX-FE] Team Name to Export:', payload.metadata.teamName);
+      console.log('[EXPORT-DOCX-FE] Final Metadata:', payload.metadata);
+      console.log('[EXPORT-DOCX-FE] payload:', payload);
+
+      const response = await api.post('/reviews/export-draft-docx', payload, { responseType: 'blob' });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -366,7 +421,9 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
 
   const reviewMonth = new Date(period.endDate).getMonth() + 1;
   const reviewYear = new Date(period.endDate).getFullYear();
-  const teamName = profile?.Team?.shortName || '';
+  let teamName = profile?.Team?.shortName || profile?.Team?.name || '';
+  // Strip redundant "Đội"
+  teamName = teamName.replace(/^Đội\s+/i, '');
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in duration-300">
@@ -395,7 +452,7 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
                 <p>SỬ DỤNG CÔNG NGHỆ CAO</p>
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <span>ĐỘI</span>
-                  <input type="text" readOnly className={`${inputClass} w-32 text-center text-blue-700`} value={teamName} />
+                  <input type="text" readOnly className={`${inputClass} w-32 text-center text-blue-700 font-bold`} value={' ' + teamName} />
                 </div>
               </div>
               <div className="text-center">
@@ -409,20 +466,20 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
               <p className="text-sm text-slate-600 font-medium">Đánh giá kết quả thực hiện nhiệm vụ của Cán bộ chiến sĩ</p>
               <div className="flex items-center justify-center gap-2 mt-3 text-sm font-semibold text-slate-800">
                 <span>Tháng</span>
-                <input type="text" readOnly className={`${inputClass} w-12 text-center text-blue-700`} value={reviewMonth} />
+                <input type="text" readOnly className={`${inputClass} w-12 text-center text-blue-700`} value={' ' + reviewMonth} />
                 <span>năm</span>
-                <input type="text" readOnly className={`${inputClass} w-16 text-center text-blue-700`} value={reviewYear} />
+                <input type="text" readOnly className={`${inputClass} w-16 text-center text-blue-700`} value={' ' + reviewYear} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-4 text-sm px-4">
               <div className="flex items-center gap-2">
                 <span className="text-slate-600 whitespace-nowrap">Họ và tên:</span>
-                <input type="text" readOnly className={`${inputClass} flex-1 text-blue-700`} value={profile?.fullName || ''} />
+                <input type="text" readOnly className={`${inputClass} flex-1 text-blue-700 font-bold`} value={' ' + (profile?.fullName || '')} />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-slate-600 whitespace-nowrap">Cấp bậc - Chức vụ:</span>
-                <input type="text" readOnly className={`${inputClass} flex-1 text-blue-700`} value={`${profile?.rank || ''} - ${profile?.position || ''}`} />
+                <input type="text" readOnly className={`${inputClass} flex-1 text-blue-700 font-bold`} value={' ' + `${profile?.rank || ''} - ${profile?.position || ''}`} />
               </div>
             </div>
           </div>
@@ -483,16 +540,38 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
         </div>
       </div>
 
-      {!isReadOnly && (
-        <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row justify-end gap-3 mt-4">
-          <button onClick={exportDocx} className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
-            <Download className="w-4 h-4" /> Xuất nháp (Word)
+      <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row justify-end gap-3 mt-4">
+        {/* Back button for Manager Mode */}
+        {isManagerMode && (
+          <button 
+            onClick={onBack} 
+            className="px-6 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors shadow-sm"
+          >
+            Quay lại
           </button>
+        )}
+
+        {(reviewStatus === 'ManagerReviewed' || reviewStatus === 'Completed' || reviewStatus === 'Reviewed') && (
+          <button onClick={exportDocx} className="px-6 py-2.5 text-slate-700 font-semibold bg-white border border-slate-300 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+            <Download className="w-4 h-4" /> Xuất file Word
+          </button>
+        )}
+
+        {isManagerMode && reviewStatus === 'Submitted' && (
+          <button 
+            onClick={() => onApprove({})} 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-200 flex items-center gap-2"
+          >
+            <CheckCircle className="w-4 h-4" /> Phê duyệt biểu mẫu
+          </button>
+        )}
+
+        {!isReadOnly && !isManagerMode && (
           <button onClick={showSubmitConfirm} className="px-8 py-2.5 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-200">
             <Save className="w-4 h-4" /> Lưu & Nộp bản đánh giá
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <ConfirmModal 
         isOpen={confirmConfig.isOpen}
@@ -504,7 +583,5 @@ const SelfReviewForm = ({ period, onBack, readOnly, employeeProfile }) => {
       />
     </div>
   );
-};
-
-export default SelfReviewForm;
+}
 
