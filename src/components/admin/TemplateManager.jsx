@@ -272,7 +272,7 @@ const TemplateManager = () => {
             </div>
             <div>
               <h3 className="font-bold text-slate-800 truncate" title={t.name}>{t.name}</h3>
-              <p className="text-xs text-slate-500 mt-0.5 truncate">{t.filePath ? t.filePath.split('/').pop() : 'Lưu trữ trên CSDL'}</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">{typeof t.filePath === 'string' && t.filePath ? t.filePath.split('/').pop() : 'Lưu trữ trên CSDL'}</p>
             </div>
           </div>
         ))}
