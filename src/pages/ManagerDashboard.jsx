@@ -21,13 +21,11 @@ const ManagerDashboard = () => {
     <div className="h-screen bg-slate-50 flex overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm flex-shrink-0">
-        <div className="p-6 border-b border-slate-100 flex items-center gap-3">
-          <div className="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
-            <span className="text-white font-bold text-lg">i</span>
-          </div>
+        <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+          <img src="/logo.png" alt="Logo" className="w-12 h-12 object-contain" />
           <div>
-            <h1 className="font-bold text-slate-800 tracking-tight">iPRS</h1>
-            <p className="text-xs text-slate-500 font-medium">Dashboard Quản lý</p>
+            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">iPRS</h1>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Dashboard Quản lý</p>
           </div>
         </div>
 
