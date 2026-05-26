@@ -8,7 +8,7 @@ import SelfReviewForm from '../employee/SelfReviewForm';
 
 const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const { user: currentUser } = useAuth();
-  const isLeader = currentUser?.role === 'Admin' || 
+  const isLeader = (currentUser?.roles && currentUser.roles.includes("Admin")) || 
                    ['Trưởng phòng', 'Phó trưởng phòng', 'Phó phòng'].includes(currentUser?.position);
   const toast = useToast();
   const [loading, setLoading] = useState(true);
@@ -76,7 +76,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
         }
       }
 
-      if (currentUser?.role === 'Admin') {
+      if ((currentUser?.roles && currentUser.roles.includes("Admin"))) {
         const teamsRes = await api.get('/teams');
         setDepartments(teamsRes.data);
       }
@@ -210,7 +210,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     try {
       toast.info('Đang tạo báo cáo Excel...');
       let url = `/reviews/export-excel?year=${exportYear}`;
-      if (currentUser?.role === 'Admin' && exportTeamId !== 'all') {
+      if ((currentUser?.roles && currentUser.roles.includes("Admin")) && exportTeamId !== 'all') {
         url += `&teamId=${exportTeamId}`;
       }
       
@@ -315,7 +315,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
               <Download className="w-4 h-4" /> Xuất báo cáo Excel
             </button>
 
-            {currentUser?.role === 'Admin' && (
+            {(currentUser?.roles && currentUser.roles.includes("Admin")) && (
               <div className="relative">
                 <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <select 
@@ -560,7 +560,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
                 </select>
               </div>
 
-              {currentUser?.role === 'Admin' && (
+              {(currentUser?.roles && currentUser.roles.includes("Admin")) && (
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Chọn Đội (Dành cho Admin)</label>
                   <select 

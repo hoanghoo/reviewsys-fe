@@ -34,7 +34,7 @@ const UserManager = () => {
   const itemsPerPage = 15;
 
   const [formData, setFormData] = useState({
-    username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '', managedTeamIds: []
+    username: '', password: '', fullName: '', roles: ["Employee"], rank: '', position: '', teamId: '', managedTeamIds: []
   });
 
   useEffect(() => {
@@ -147,7 +147,7 @@ const UserManager = () => {
         await api.post('/users', { ...formData, departmentId: targetDepartment?.id });
         toast.success('Tạo nhân sự thành công!');
       }
-      setFormData({ username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '', managedTeamIds: [] });
+      setFormData({ username: '', password: '', fullName: '', roles: ["Employee"], rank: '', position: '', teamId: '', managedTeamIds: [] });
       setIsModalOpen(false);
       setEditingUser(null);
       fetchData();
@@ -215,7 +215,7 @@ const UserManager = () => {
       .filter(u => {
         const matchSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
           (u.username || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const matchRole = filterRole ? u.role === filterRole : true;
+        const matchRole = filterRole ? (u.roles && u.roles.includes(filterRole)) : true;
         const matchRank = filterRank ? u.rank === filterRank : true;
         const matchPosition = filterPosition ? u.position === filterPosition : true;
         const matchTeam = filterTeamId ? u.teamId?.toString() === filterTeamId : true;
@@ -269,7 +269,7 @@ const UserManager = () => {
           >
             <Filter className="w-4 h-4" /> Lọc
           </button>
-          <button onClick={() => { setEditingUser(null); setFormData({ username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '', managedTeamIds: [] }); setIsModalOpen(true); }} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
+          <button onClick={() => { setEditingUser(null); setFormData({ username: '', password: '', fullName: '', roles: ["Employee"], rank: '', position: '', teamId: '', managedTeamIds: [] }); setIsModalOpen(true); }} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
             <Plus className="w-4 h-4" /> Thêm nhân sự
           </button>
           <button onClick={() => setIsImportModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
@@ -336,13 +336,13 @@ const UserManager = () => {
                 <td className="px-4 py-2 text-slate-600">{u.position || '-'}</td>
                 <td className="px-4 py-2 text-slate-600">{u.Team ? u.Team.shortName : '-'}</td>
                 <td className="px-4 py-2">
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${u.role === 'Admin' ? 'bg-red-100 text-red-700' : u.role === 'Leader' ? 'bg-purple-100 text-purple-700' : u.role === 'Manager' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {u.role === 'Admin' ? 'Người Quản trị' : u.role === 'Leader' ? 'Lãnh đạo' : u.role === 'Manager' ? 'Quản lý' : 'Cán bộ'}
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${(u.roles && u.roles.includes("Admin")) ? 'bg-red-100 text-red-700' : (u.roles && u.roles.includes("Leader")) ? 'bg-purple-100 text-purple-700' : (u.roles && u.roles.includes("Manager")) ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    {(u.roles && u.roles.includes("Admin")) ? "Quản trị" : (u.roles && u.roles.includes("Leader")) ? "Lãnh đạo" : (u.roles && u.roles.includes("Manager")) ? "Quản lý" : "Cán bộ"}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => { setEditingUser(u); setFormData({ username: u.username, password: '', fullName: u.fullName, role: u.role, rank: u.rank || '', position: u.position || '', teamId: u.teamId || '', managedTeamIds: Array.isArray(u.managedTeamIds) ? u.managedTeamIds : [] }); setIsModalOpen(true); }} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors" title="Chỉnh sửa">
+                    <button onClick={() => { setEditingUser(u); setFormData({ username: u.username, password: '', fullName: u.fullName, roles: Array.isArray(u.roles) ? u.roles : (u.roles ? [u.roles] : ["Employee"]), rank: u.rank || '', position: u.position || '', teamId: u.teamId || '', managedTeamIds: Array.isArray(u.managedTeamIds) ? u.managedTeamIds : [] }); setIsModalOpen(true); }} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors" title="Chỉnh sửa">
                       <Edit className="w-4 h-4" />
                     </button>
                     <button onClick={() => handleResetPassword(u)} className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 p-1.5 rounded-lg transition-colors" title="Reset mật khẩu">
@@ -431,16 +431,27 @@ const UserManager = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Vai trò hệ thống</label>
-                  <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none">
-                    <option value="Employee">Cán bộ</option>
-                    <option value="Leader">Lãnh đạo</option>
-                    <option value="Manager">Quản lý</option>
-                    <option value="Admin">Người Quản trị</option>
-                  </select>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Vai trò hệ thống</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { val: 'Employee', label: 'Cán bộ' },
+                      { val: 'Manager', label: 'Quản lý' },
+                      { val: 'Leader', label: 'Lãnh đạo' },
+                      { val: 'Admin', label: 'Quản trị viên' }
+                    ].map(r => (
+                      <label key={r.val} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="checkbox" checked={formData.roles && formData.roles.includes(r.val)} onChange={(e) => {
+                          const currentRoles = formData.roles || [];
+                          const nextRoles = e.target.checked ? [...currentRoles, r.val] : currentRoles.filter(x => x !== r.val);
+                          setFormData({ ...formData, roles: nextRoles.length ? nextRoles : ['Employee'] });
+                        }} className="rounded border-slate-300 text-purple-600 focus:ring-purple-500" />
+                        {r.label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
-              {((formData.role === 'Manager' || formData.role === 'Leader') && (formData.position === 'Phó trưởng phòng' || formData.position === 'Phó phòng')) && (
+              {((formData.roles && (formData.roles.includes("Manager") || formData.roles.includes("Leader"))) && (formData.position === 'Phó trưởng phòng' || formData.position === 'Phó phòng')) && (
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
                   <label className="block text-sm font-semibold text-slate-700">Các đội phụ trách quản lý</label>
                   <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto">

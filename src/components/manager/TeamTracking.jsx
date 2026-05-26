@@ -220,11 +220,11 @@ const TeamTracking = () => {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                      u.role === 'Manager' 
+                      (u.roles && u.roles.includes("Manager")) 
                       ? 'bg-blue-50 text-blue-700 border-blue-100' 
                       : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                     }`}>
-                      {u.role === 'Manager' ? 'Chỉ huy' : 'Chiến sĩ'}
+                      {(u.roles && u.roles.includes("Manager")) ? 'Chỉ huy' : 'Chiến sĩ'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">

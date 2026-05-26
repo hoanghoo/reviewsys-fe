@@ -78,7 +78,7 @@ const Profile = () => {
             <div className="mt-6 w-full pt-6 border-t border-slate-100 space-y-3">
               <div className="flex items-center gap-3 text-sm text-slate-600 justify-center">
                 <Shield className="w-4 h-4 text-blue-500" />
-                <span className="font-semibold">{profile?.role === 'Admin' ? 'Người Quản trị' : profile?.role === 'Leader' ? 'Lãnh đạo' : profile?.role === 'Manager' ? 'Quản lý' : 'Cán bộ'}</span>
+                <span className="font-semibold">{(profile?.roles && profile.roles.includes("Admin")) ? "Người Quản trị" : (profile?.roles && profile.roles.includes("Leader")) ? "Lãnh đạo" : (profile?.roles && profile.roles.includes("Manager")) ? "Quản lý" : "Cán bộ"}</span>
               </div>
             </div>
           </div>

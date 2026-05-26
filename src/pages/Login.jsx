@@ -29,9 +29,16 @@ const Login = () => {
     
     try {
       const user = await login(username, password);
-      if (user.role === 'Admin') navigate('/admin');
-      else if (user.role === 'Manager' || user.role === 'Leader') navigate('/manager');
-      else navigate('/employee');
+      // Redirect based on roles, prioritizing lower roles if multiple exist
+      if (user.roles && user.roles.includes('Employee')) {
+        navigate('/employee');
+      } else if (user.roles && (user.roles.includes('Manager') || user.roles.includes('Leader'))) {
+        navigate('/manager');
+      } else if (user.roles && user.roles.includes('Admin')) {
+        navigate('/admin');
+      } else {
+        navigate('/employee');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to login');
     } finally {

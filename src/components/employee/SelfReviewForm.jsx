@@ -46,7 +46,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('');
   
-  const isAdmin = currentUserProfile?.role === 'Admin';
+  const isAdmin = (currentUserProfile?.roles && currentUserProfile.roles.includes("Admin"));
   const isReadOnly = (readOnly || isSubmitted) && (!isManagerMode || (isLeader && !isAdmin));
 
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
@@ -127,7 +127,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
 
       // 3. Determine Commander Name
       // If the viewer is a Manager/Admin, they are the commander
-      if (currentUser.role === 'Manager' || currentUser.role === 'Admin') {
+      if ((currentUser.roles && (currentUser.roles.includes("Manager") || currentUser.roles.includes("Admin")))) {
         setCommanderName(currentUser.fullName);
       } else {
         // Otherwise use the employee's manager

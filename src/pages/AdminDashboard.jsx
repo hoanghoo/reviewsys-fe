@@ -56,24 +56,19 @@ const AdminDashboard = () => {
         <div className="p-4 border-t border-slate-100">
           <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-100">
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{user?.role === 'Admin' ? 'Người Quản trị' : user?.role === 'Leader' ? 'Lãnh đạo' : user?.role === 'Manager' ? 'Quản lý' : 'Cán bộ'}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{user?.roles?.includes("Admin") ? 'Người Quản trị' : user?.roles?.includes("Leader") ? "Lãnh đạo" : user?.roles?.includes("Manager") ? "Quản lý" : "Cán bộ"}</p>
           </div>
-          {user?.role === 'Admin' && (
-            <div className="space-y-1.5 mb-4">
-              <Link
-                to="/employee/overview"
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-xl transition-all shadow-sm"
+          {user?.roles?.includes("Admin") && (
+            <div className="mb-4">
+              <select 
+                onChange={(e) => { if(e.target.value) window.location.href = e.target.value; }}
+                value="/admin/teams"
+                className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-purple-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
               >
-                <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                Xem vai trò Cá nhân
-              </Link>
-              <Link
-                to="/manager/team-tracking"
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-xl transition-all shadow-sm"
-              >
-                <Users className="w-3.5 h-3.5 text-slate-400" />
-                Xem vai trò Quản lý
-              </Link>
+                {user?.roles?.includes("Employee") && <option value="/employee/overview">👤 Vai trò: Cán bộ</option>}
+                {(user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && <option value="/manager/team-tracking">👥 Vai trò: Quản lý</option>}
+                <option value="/admin/teams">🛡️ Vai trò: Quản trị</option>
+              </select>
             </div>
           )}
           <button

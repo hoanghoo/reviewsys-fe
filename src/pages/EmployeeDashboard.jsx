@@ -53,22 +53,17 @@ const EmployeeDashboard = () => {
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
             <p className="text-xs text-slate-500 mt-0.5">{user?.rank} {user?.position ? `- ${user?.position}` : ''}</p>
           </div>
-          {user?.role === 'Admin' && (
-            <div className="space-y-1.5 mb-4">
-              <Link
-                to="/admin/teams"
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-xl transition-all shadow-sm"
+          {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && (
+            <div className="mb-4">
+              <select 
+                onChange={(e) => { if(e.target.value) window.location.href = e.target.value; }}
+                value="/employee/overview"
+                className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-emerald-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
               >
-                <Shield className="w-3.5 h-3.5 text-slate-400" />
-                Trang Quản trị (Admin)
-              </Link>
-              <Link
-                to="/manager/team-tracking"
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-xl transition-all shadow-sm"
-              >
-                <Users className="w-3.5 h-3.5 text-slate-400" />
-                Trang Quản lý (Manager)
-              </Link>
+                {user?.roles?.includes("Employee") && <option value="/employee/overview">👤 Vai trò: Cán bộ</option>}
+                {(user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && <option value="/manager/team-tracking">👥 Vai trò: Quản lý</option>}
+                {user?.roles?.includes("Admin") && <option value="/admin/teams">🛡️ Vai trò: Quản trị</option>}
+              </select>
             </div>
           )}
           <button 
