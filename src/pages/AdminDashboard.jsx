@@ -56,7 +56,7 @@ const AdminDashboard = () => {
         <div className="p-4 border-t border-slate-100">
           <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-100">
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{user?.roles?.includes("Admin") ? 'Người Quản trị' : user?.roles?.includes("Leader") ? "Lãnh đạo" : user?.roles?.includes("Manager") ? "Quản lý" : "Cán bộ"}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{user?.roles?.includes("Admin") ? 'Người Quản trị' : user?.roles?.includes("Leader") ? "Lãnh đạo" : user?.roles?.includes("Manager") ? "Chỉ huy đội" : "Cán bộ"}</p>
           </div>
           {user?.roles?.includes("Admin") && (
             <div className="mb-4">
@@ -66,7 +66,8 @@ const AdminDashboard = () => {
                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-purple-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
               >
                 {user?.roles?.includes("Employee") && <option value="/employee/overview">👤 Vai trò: Cán bộ</option>}
-                {(user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && <option value="/manager/team-tracking">👥 Vai trò: Quản lý</option>}
+                {user?.roles?.includes("Manager") && !user?.roles?.includes("Leader") && <option value="/manager/team-tracking">👥 Vai trò: Chỉ huy đội</option>}
+                {user?.roles?.includes("Leader") && <option value="/manager/evaluations">👥 Vai trò: Lãnh đạo phòng</option>}
                 <option value="/admin/teams">🛡️ Vai trò: Quản trị</option>
               </select>
             </div>

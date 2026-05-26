@@ -29,13 +29,13 @@ const Login = () => {
     
     try {
       const user = await login(username, password);
-      // Redirect based on roles, prioritizing lower roles if multiple exist
-      if (user.roles && user.roles.includes('Employee')) {
-        navigate('/employee');
+      // Redirect based on roles, prioritizing higher roles if multiple exist
+      if (user.roles && user.roles.includes('Admin')) {
+        navigate('/admin');
       } else if (user.roles && (user.roles.includes('Manager') || user.roles.includes('Leader'))) {
         navigate('/manager');
-      } else if (user.roles && user.roles.includes('Admin')) {
-        navigate('/admin');
+      } else if (user.roles && user.roles.includes('Employee')) {
+        navigate('/employee');
       } else {
         navigate('/employee');
       }

@@ -207,7 +207,7 @@ const UserManager = () => {
       if (p === 'trưởng phòng') return 1;
       if (p === 'phó trưởng phòng' || p === 'phó phòng') return 2;
       if (p === 'đội trưởng') return 3;
-      if (p === 'phó đội trưởng' || p === 'đội phó') return 4;
+      if (p === 'đội phó' || p === 'đội phó') return 4;
       return 5;
     };
 
@@ -307,7 +307,7 @@ const UserManager = () => {
               <option value="">Tất cả vai trò</option>
               <option value="Admin">Người Quản trị</option>
               <option value="Leader">Lãnh đạo</option>
-              <option value="Manager">Quản lý</option>
+              <option value="Manager">Chỉ huy đội</option>
               <option value="Employee">Cán bộ</option>
             </select>
           </div>
@@ -337,7 +337,7 @@ const UserManager = () => {
                 <td className="px-4 py-2 text-slate-600">{u.Team ? u.Team.shortName : '-'}</td>
                 <td className="px-4 py-2">
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold ${(u.roles && u.roles.includes("Admin")) ? 'bg-red-100 text-red-700' : (u.roles && u.roles.includes("Leader")) ? 'bg-purple-100 text-purple-700' : (u.roles && u.roles.includes("Manager")) ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {(u.roles && u.roles.includes("Admin")) ? "Quản trị" : (u.roles && u.roles.includes("Leader")) ? "Lãnh đạo" : (u.roles && u.roles.includes("Manager")) ? "Quản lý" : "Cán bộ"}
+                    {(u.roles && u.roles.includes("Admin")) ? "Quản trị" : (u.roles && u.roles.includes("Leader")) ? "Lãnh đạo" : (u.roles && u.roles.includes("Manager")) ? "Chỉ huy đội" : "Cán bộ"}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right">
@@ -435,7 +435,7 @@ const UserManager = () => {
                       ? [] 
                       : isLeadershipTeam 
                         ? ['Trưởng phòng', 'Phó phòng', 'Cán bộ'] 
-                        : ['Đội trưởng', 'Phó đội trưởng', 'Đội phó', 'Cán bộ'];
+                        : ['Đội trưởng', 'Đội phó', 'Cán bộ'];
                     
                     return (
                       <select 
@@ -521,7 +521,7 @@ const UserManager = () => {
                     <ul className="text-xs text-slate-600 space-y-2.5 list-disc pl-4 leading-relaxed">
                       <li>File Excel phải chứa đúng các tiêu đề cột: <strong>Họ và tên, Cấp bậc, Chức vụ, Đội</strong>.</li>
                       <li><strong>Cấp bậc</strong>: Chỉ hỗ trợ cấp bậc công an nhân dân (Thiếu úy, Trung úy, Thượng úy, Đại úy, Thiếu tá, Trung tá, Thượng tá, Đại tá, v.v.).</li>
-                      <li><strong>Chức vụ</strong>: Chỉ hỗ trợ: Trưởng phòng, Phó phòng, Đội trưởng, Phó đội trưởng, Cán bộ.</li>
+                      <li><strong>Chức vụ</strong>: Chỉ hỗ trợ: Trưởng phòng, Phó phòng, Đội trưởng, Đội phó, Cán bộ.</li>
                       <li><strong>Đội</strong>: Phải khớp với tên Đội trong cơ sở dữ liệu (ví dụ: Ban Lãnh đạo, Đội 1, Đội 2...).</li>
                       <li>Tài khoản (Username) sẽ được tự động tạo dựa trên tên không dấu và chữ cái đầu của họ đệm. Mật khẩu sẽ tự động được sinh ngẫu nhiên.</li>
                     </ul>

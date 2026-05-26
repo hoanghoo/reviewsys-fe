@@ -26,13 +26,13 @@ function App() {
               } />
               
               <Route path="/manager/*" element={
-                <PrivateRoute allowedRoles={['Manager', 'Admin']}>
+                <PrivateRoute allowedRoles={['Leader', 'Manager', 'Admin']}>
                   <ManagerDashboard />
                 </PrivateRoute>
               } />
               
               <Route path="/employee/*" element={
-                <PrivateRoute allowedRoles={['Employee', 'Manager', 'Admin']}>
+                <PrivateRoute allowedRoles={['Employee', 'Leader', 'Manager', 'Admin']}>
                   <EmployeeDashboard />
                 </PrivateRoute>
               } />

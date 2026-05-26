@@ -61,7 +61,8 @@ const EmployeeDashboard = () => {
                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-emerald-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
               >
                 {user?.roles?.includes("Employee") && <option value="/employee/overview">👤 Vai trò: Cán bộ</option>}
-                {(user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && <option value="/manager/team-tracking">👥 Vai trò: Quản lý</option>}
+                {user?.roles?.includes("Manager") && !user?.roles?.includes("Leader") && <option value="/manager/team-tracking">👥 Vai trò: Chỉ huy đội</option>}
+                {user?.roles?.includes("Leader") && <option value="/manager/evaluations">👥 Vai trò: Lãnh đạo phòng</option>}
                 {user?.roles?.includes("Admin") && <option value="/admin/teams">🛡️ Vai trò: Quản trị</option>}
               </select>
             </div>

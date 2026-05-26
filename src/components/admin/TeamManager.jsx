@@ -243,14 +243,14 @@ const TeamManager = () => {
       {leaderModalTeam && (() => {
         const isLeadership = leaderModalTeam.id === 7 || leaderModalTeam.shortName === 'Ban Lãnh đạo';
         const mainLabel = isLeadership ? 'Trưởng phòng' : 'Đội trưởng';
-        const subLabel = isLeadership ? 'Phó phòng' : 'Phó đội trưởng';
+        const subLabel = isLeadership ? 'Phó phòng' : 'Đội phó';
 
         const isDeputyUser = (u) => {
           const pos = (u.position || '').toLowerCase().trim();
           if (isLeadership) {
             return pos === 'phó trưởng phòng' || pos === 'phó phòng';
           } else {
-            return pos === 'phó đội trưởng' || pos === 'đội phó';
+            return pos === 'đội phó' || pos === 'đội phó';
           }
         };
 
@@ -566,7 +566,7 @@ const TeamManager = () => {
                             if (!selectedDeputyCandidate) return;
                             setLocalTeamUsers(localTeamUsers.map(u => 
                               u.id === Number(selectedDeputyCandidate) 
-                                ? { ...u, position: isLeadership ? 'Phó phòng' : 'Phó đội trưởng', role: 'Manager', managedTeamIds: [] } 
+                                ? { ...u, position: isLeadership ? 'Phó phòng' : 'Đội phó', role: 'Manager', managedTeamIds: [] } 
                                 : u
                             ));
                             setSelectedDeputyCandidate('');
@@ -598,7 +598,7 @@ const TeamManager = () => {
           if (p === 'trưởng phòng') return 1;
           if (p === 'phó trưởng phòng' || p === 'phó phòng') return 2;
           if (p === 'đội trưởng') return 3;
-          if (p === 'phó đội trưởng' || p === 'đội phó') return 4;
+          if (p === 'đội phó' || p === 'đội phó') return 4;
           return 5;
         };
 

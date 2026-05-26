@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
-import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info, UserCheck } from 'lucide-react';
+import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info, UserCheck, Power } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 import SelfReviewForm from '../employee/SelfReviewForm';
 
 const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const { user: currentUser } = useAuth();
-  const isLeader = (currentUser?.roles && currentUser.roles.includes("Admin")) || 
+  const isLeader = (currentUser?.roles && currentUser.roles.includes("Leader")) || 
                    ['Trưởng phòng', 'Phó trưởng phòng', 'Phó phòng'].includes(currentUser?.position);
   const toast = useToast();
   const [loading, setLoading] = useState(true);
@@ -20,7 +20,8 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const [editScore, setEditScore] = useState('');
   const [editFeedback, setEditFeedback] = useState({ managerNote: '', commander: '' });
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const isManager = currentUser?.roles && currentUser.roles.includes("Manager");
+  const [selectedStatus, setSelectedStatus] = useState(isManager && !isLeader ? 'Submitted' : '');
   const [selectedPeriodId, setSelectedPeriodId] = useState(propPeriodId || '');
   const [selectedTeamId, setSelectedTeamId] = useState('all');
   const [selectedDeptId, setSelectedDeptId] = useState('all');
@@ -66,14 +67,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
       if (propPeriodId) {
         const targetPeriod = periodsRes.data.find(p => p.id === parseInt(propPeriodId));
         setActivePeriod(targetPeriod);
-      } else {
-        const activeRes = await api.get('/review-periods/active');
-        if (activeRes.data) {
-          setActivePeriod(activeRes.data);
-          setSelectedPeriodId(activeRes.data.id);
-        } else if (periodsRes.data.length > 0) {
-          setSelectedPeriodId(periodsRes.data[0].id);
-        }
+        setSelectedPeriodId(parseInt(propPeriodId));
       }
 
       if ((currentUser?.roles && currentUser.roles.includes("Admin"))) {
@@ -124,7 +118,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     setEditFeedback(fb);
   };
 
-  const handleApprove = async (targetStatus) => {
+  const handleApprove = async (targetStatus, formCommanderName, formCommanderRank, formCommanderPosition) => {
     if (!selectedReview) return;
     
     // Extract DOM data
@@ -140,7 +134,9 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     const finalFeedback = {
        ...editFeedback,
        tableData,
-       commander: editFeedback.commander 
+       commander: formCommanderName || editFeedback.commander,
+       commanderRank: formCommanderRank || editFeedback.commanderRank,
+       commanderPosition: formCommanderPosition || editFeedback.commanderPosition
     };
 
     try {
@@ -253,9 +249,58 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   if (loading) return <div className="p-12 text-center text-slate-500">Đang tải danh sách đội...</div>;
 
   if (!activePeriod) {
+    const now = new Date();
+    const openPeriods = periods.filter(p => p.status === 'Open' && new Date(p.startDate) <= now);
+    const upcomingPeriods = periods.filter(p => p.status === 'Open' && new Date(p.startDate) > now);
+    const closedPeriods = periods.filter(p => p.status === 'Closed');
+
+    const renderPeriodCard = (p) => (
+      <div 
+        key={p.id} 
+        onClick={() => { setSelectedPeriodId(p.id); setActivePeriod(p); setPagination(prev => ({...prev, page: 1})); }}
+        className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col gap-3 group"
+      >
+        <div className="flex items-center justify-between">
+          <div className="p-3 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{p.monthYear || 'N/A'}</span>
+        </div>
+        <div>
+          <h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-700 transition-colors">{p.name}</h3>
+          <p className="text-sm text-slate-500 mt-1">Từ {new Date(p.startDate).toLocaleDateString('vi-VN')} đến {new Date(p.endDate).toLocaleDateString('vi-VN')}</p>
+        </div>
+      </div>
+    );
+
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
-        <p className="text-slate-500">Không có kỳ đánh giá nào đang mở để theo dõi.</p>
+      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-7xl mx-auto">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Power className="w-5 h-5 text-emerald-500" /> Kỳ đang mở</h2>
+          {openPeriods.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {openPeriods.map(renderPeriodCard)}
+            </div>
+          ) : <p className="text-slate-500 italic bg-white p-6 rounded-xl border border-slate-200 text-center">Không có kỳ đánh giá nào đang mở.</p>}
+        </div>
+
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Clock className="w-5 h-5 text-amber-500" /> Kỳ sắp mở</h2>
+          {upcomingPeriods.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {upcomingPeriods.map(renderPeriodCard)}
+            </div>
+          ) : <p className="text-slate-500 italic bg-white p-6 rounded-xl border border-slate-200 text-center">Không có kỳ đánh giá nào sắp mở.</p>}
+        </div>
+
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-slate-500" /> Kỳ đã hoàn tất</h2>
+          {closedPeriods.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {closedPeriods.map(renderPeriodCard)}
+            </div>
+          ) : <p className="text-slate-500 italic bg-white p-6 rounded-xl border border-slate-200 text-center">Chưa có kỳ đánh giá nào hoàn tất.</p>}
+        </div>
       </div>
     );
   }

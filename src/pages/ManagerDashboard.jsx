@@ -13,8 +13,8 @@ const ManagerDashboard = () => {
   const location = useLocation();
 
   const tabs = [
-    { id: 'team-tracking', label: 'Theo dõi Đội', icon: Users },
-    { id: 'evaluations', label: 'Quản lý đánh giá', icon: FileSignature },
+    ...(!user?.roles?.includes('Leader') ? [{ id: 'team-tracking', label: 'Theo dõi Đội', icon: Users }] : []),
+    { id: 'evaluations', label: 'Kỳ đánh giá', icon: FileSignature },
     { id: 'profile', label: 'Hồ sơ cá nhân', icon: UserIcon },
   ];
 
@@ -60,11 +60,12 @@ const ManagerDashboard = () => {
             <div className="mb-4">
               <select 
                 onChange={(e) => { if(e.target.value) window.location.href = e.target.value; }}
-                value="/manager/team-tracking"
+                value={user?.roles?.includes("Leader") ? "/manager/evaluations" : "/manager/team-tracking"}
                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-blue-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
               >
                 {user?.roles?.includes("Employee") && <option value="/employee/overview">👤 Vai trò: Cán bộ</option>}
-                {(user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && <option value="/manager/team-tracking">👥 Vai trò: Quản lý</option>}
+                {user?.roles?.includes("Manager") && !user?.roles?.includes("Leader") && <option value="/manager/team-tracking">👥 Vai trò: Chỉ huy đội</option>}
+                {user?.roles?.includes("Leader") && <option value="/manager/evaluations">👥 Vai trò: Lãnh đạo phòng</option>}
                 {user?.roles?.includes("Admin") && <option value="/admin/teams">🛡️ Vai trò: Quản trị</option>}
               </select>
             </div>
@@ -86,7 +87,7 @@ const ManagerDashboard = () => {
               <Route path="team-tracking" element={<TeamTracking />} />
               <Route path="evaluations" element={<TeamReview />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="*" element={<Navigate to="team-tracking" replace />} />
+              <Route path="*" element={<Navigate to="evaluations" replace />} />
            </Routes>
         </div>
       </main>

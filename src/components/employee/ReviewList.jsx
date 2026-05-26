@@ -30,11 +30,11 @@ const ReviewList = () => {
     if (review) {
       switch (review.status) {
         case 'Submitted':
-          return { label: 'Đã nộp', color: 'bg-blue-100 text-blue-700', icon: Clock };
+          return { label: 'Chờ chỉ huy duyệt', color: 'bg-blue-100 text-blue-700', icon: Clock };
         case 'ManagerReviewed':
-          return { label: 'Đã đánh giá', color: 'bg-purple-100 text-purple-700', icon: CheckCircle };
+          return { label: 'Chờ lãnh đạo duyệt', color: 'bg-purple-100 text-purple-700', icon: Clock };
         case 'Completed':
-          return { label: 'Hoàn tất', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle };
+          return { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle };
         default:
           return { label: 'Chưa hoàn thành', color: 'bg-amber-100 text-amber-700', icon: AlertCircle };
       }
@@ -122,15 +122,16 @@ const ReviewList = () => {
           <History className="w-4 h-4" />
           Lịch sử đánh giá ({completedPeriods.length})
         </h3>
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-x-auto shadow-sm">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-400 text-[11px] font-bold uppercase tracking-widest">
-                <th className="px-8 py-4">Kỳ đánh giá</th>
-                <th className="px-8 py-4">Ngày hoàn thành</th>
-                <th className="px-8 py-4">Trạng thái</th>
-                <th className="px-8 py-4 text-center">Điểm</th>
-                <th className="px-8 py-4 text-right">Thao tác</th>
+                <th className="px-5 whitespace-nowrap py-4">Kỳ đánh giá</th>
+                <th className="px-5 whitespace-nowrap py-4">Cập nhật lần cuối</th>
+                <th className="px-5 whitespace-nowrap py-4">Trạng thái</th>
+                <th className="px-5 whitespace-nowrap py-4 text-center">Điểm cá nhân</th>
+                <th className="px-5 whitespace-nowrap py-4 text-center">Điểm chỉ huy</th>
+                <th className="px-5 whitespace-nowrap py-4 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -140,25 +141,28 @@ const ReviewList = () => {
                 const Icon = status.icon;
                 return (
                   <tr key={p.id} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="px-8 py-5">
+                    <td className="px-5 whitespace-nowrap py-5">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-800">{p.name}</span>
                         <span className="text-[10px] text-slate-400 font-medium">Biểu mẫu: {p.Template?.name || 'Mặc định'}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-5 text-sm text-slate-500 font-medium">
+                    <td className="px-5 whitespace-nowrap py-5 text-sm text-slate-500 font-medium">
                       {new Date(review.updatedAt).toLocaleDateString('vi-VN')}
                     </td>
-                    <td className="px-8 py-5">
+                    <td className="px-5 whitespace-nowrap py-5">
                       <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${status.color} inline-flex items-center gap-1.5`}>
                         <Icon className="w-3 h-3" />
                         {status.label}
                       </span>
                     </td>
-                    <td className="px-8 py-5 text-center">
-                      <span className="font-bold text-slate-700">{review.score || review.selfScore || '-'}</span>
+                    <td className="px-5 whitespace-nowrap py-5 text-center">
+                      <span className="font-bold text-slate-700">{review.selfScore || '-'}</span>
                     </td>
-                    <td className="px-8 py-5 text-right">
+                    <td className="px-5 whitespace-nowrap py-5 text-center">
+                      <span className="font-bold text-blue-700">{review.score || '-'}</span>
+                    </td>
+                    <td className="px-5 whitespace-nowrap py-5 text-right">
                       <button 
                         onClick={() => { setSelectedPeriod(p); setViewMode('form'); }}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
@@ -172,7 +176,7 @@ const ReviewList = () => {
               })}
               {completedPeriods.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="px-8 py-12 text-center text-slate-400 font-medium italic">
+                  <td colSpan="6" className="px-5 whitespace-nowrap py-12 text-center text-slate-400 font-medium italic">
                     Chưa có lịch sử đánh giá
                   </td>
                 </tr>
