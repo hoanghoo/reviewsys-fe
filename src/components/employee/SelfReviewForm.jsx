@@ -31,7 +31,7 @@ const DOCX_PREVIEW_STYLES = `
 
 const inputClass = "h-7 border-b border-slate-300 bg-transparent outline-none px-1.5 text-slate-800 font-semibold focus:border-blue-500 transition-colors placeholder:font-normal placeholder:text-slate-400";
 
-export default function SelfReviewForm({ period, onBack, employeeProfile = null, readOnly = false, isManagerMode = false, onTotalScoreChange, onApprove }) {
+export default function SelfReviewForm({ period, onBack, employeeProfile = null, readOnly = false, isManagerMode = false, isLeader = false, onTotalScoreChange, onApprove }) {
   const { user: currentUserProfile } = useAuth();
   const toast = useToast();
   const formRef = useRef(null);
@@ -46,7 +46,8 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('');
   
-  const isReadOnly = (readOnly || isSubmitted) && !isManagerMode;
+  const isAdmin = currentUserProfile?.role === 'Admin';
+  const isReadOnly = (readOnly || isSubmitted) && (!isManagerMode || (isLeader && !isAdmin));
 
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
 
@@ -71,11 +72,35 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
           // Initial configuration of inputs
           const allInputs = formRef.current.querySelectorAll('input.score-input, input.note-input');
           allInputs.forEach(input => {
-            input.readOnly = isReadOnly;
-            if (isReadOnly) {
+            const isCommanderScore = input.classList.contains('commander-score');
+            
+            // Determine if this specific input should be readonly/disabled based on role
+            let shouldBeReadOnly = isReadOnly;
+            if (!isReadOnly) {
+              if (isManagerMode) {
+                // Manager can edit commander-score AND note-input
+                const isNoteInput = input.classList.contains('note-input');
+                shouldBeReadOnly = !(isCommanderScore || isNoteInput);
+              } else {
+                // Employee can edit score (non-commander) and notes
+                shouldBeReadOnly = isCommanderScore;
+              }
+            }
+
+            input.readOnly = shouldBeReadOnly;
+            if (shouldBeReadOnly) {
               input.classList.add('bg-slate-50', 'cursor-not-allowed');
+              input.setAttribute('disabled', 'true');
             } else {
               input.classList.remove('bg-slate-50', 'cursor-not-allowed');
+              input.removeAttribute('disabled');
+            }
+
+            // Prevent scroll wheel from modifying number inputs
+            if (input.type === 'number') {
+              input.addEventListener('wheel', (e) => {
+                e.preventDefault();
+              }, { passive: false });
             }
           });
         }
@@ -203,18 +228,47 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
     // 4. Calculate final total from all root-level nodes
     const rootChildren = inputs.filter(i => i.getAttribute('data-parent-id') === 'root');
     let total = 0;
+    
+    let valI = 0;
+    let valII = 0;
+    let isIIFilled = false;
+
+    // Helper to check if a node or its children have been filled (value !== '')
+    const checkIsFilled = (nodeId) => {
+      const nodeInput = inputs.find(i => i.getAttribute('data-id') === nodeId);
+      if (!nodeInput) return false;
+      const children = inputs.filter(i => i.getAttribute('data-parent-id') === nodeId);
+      if (children.length > 0) {
+        return children.some(child => checkIsFilled(child.getAttribute('data-id')));
+      } else {
+        return nodeInput.value !== '';
+      }
+    };
+
     rootChildren.forEach(child => {
        const val = getValue(child.getAttribute('data-id'));
        const row = child.closest('tr');
        const firstCellText = row?.querySelector('td')?.textContent.trim().toUpperCase() || '';
        
-       // Deduct penalty section (III)
-       if (firstCellText === 'III') {
-         total -= val;
+       if (firstCellText === 'I') {
+         valI = val;
+       } else if (firstCellText === 'II') {
+         valII = val;
+         isIIFilled = checkIsFilled(child.getAttribute('data-id')) || val > 0;
+       } else if (firstCellText === 'III' || firstCellText.includes('CỘNG')) {
+         total += val; // Điểm cộng
+       } else if (firstCellText === 'IV' || firstCellText.includes('TRỪ')) {
+         total -= val; // Điểm trừ
        } else {
          total += val;
        }
     });
+
+    if (isIIFilled) {
+      total += (valI + valII) / 2;
+    } else {
+      total += valI; // If II is not filled or = 0, just add I
+    }
     
     setTotalScore(total);
     if (onTotalScoreChange) {
@@ -238,6 +292,22 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
       
       calculateTree();
     }
+  };
+
+  const cloneScores = () => {
+    if (!formRef.current || isReadOnly) return;
+    const inputs = formRef.current.querySelectorAll('.score-input:not(.commander-score)');
+    inputs.forEach(input => {
+      const id = input.getAttribute('data-id');
+      if (id) {
+        const commanderInput = formRef.current.querySelector(`.commander-score[data-id="${id}_commander"]`);
+        if (commanderInput && !commanderInput.readOnly) {
+          commanderInput.value = input.value;
+        }
+      }
+    });
+    calculateTree();
+    toast.success("Đã sao chép điểm tự chấm sang điểm chỉ huy!");
   };
 
   const handleTableKeyDown = (e) => {
@@ -419,8 +489,8 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
     );
   }
 
-  const reviewMonth = new Date(period.endDate).getMonth() + 1;
-  const reviewYear = new Date(period.endDate).getFullYear();
+  const reviewMonth = period.monthYear ? period.monthYear.split('-')[1] : (new Date(period.endDate).getMonth() + 1);
+  const reviewYear = period.monthYear ? period.monthYear.split('-')[0] : new Date(period.endDate).getFullYear();
   let teamName = profile?.Team?.shortName || profile?.Team?.name || '';
   // Strip redundant "Đội"
   teamName = teamName.replace(/^Đội\s+/i, '');
@@ -557,13 +627,41 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
           </button>
         )}
 
-        {isManagerMode && reviewStatus === 'Submitted' && (
-          <button 
-            onClick={() => onApprove({})} 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-200 flex items-center gap-2"
-          >
-            <CheckCircle className="w-4 h-4" /> Phê duyệt biểu mẫu
-          </button>
+        {isManagerMode && (!isLeader || isAdmin) && reviewStatus === 'Submitted' && (
+          <>
+            <button 
+              onClick={cloneScores} 
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm border border-indigo-200 flex items-center gap-2"
+            >
+              Sao chép điểm
+            </button>
+            <button 
+              onClick={() => onApprove('ManagerReviewed')} 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-200 flex items-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" /> Duyệt (Chỉ huy)
+            </button>
+          </>
+        )}
+
+        {isManagerMode && (isLeader || isAdmin) && (reviewStatus === 'ManagerReviewed' || reviewStatus === 'Submitted') && (
+          <>
+
+            {reviewStatus === 'ManagerReviewed' && (
+              <button 
+                onClick={() => onApprove('Submitted')} 
+                className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-amber-200 flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Trả lại Chỉ huy
+              </button>
+            )}
+            <button 
+              onClick={() => onApprove('Completed')} 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-emerald-200 flex items-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" /> Phê duyệt (Lãnh đạo)
+            </button>
+          </>
         )}
 
         {!isReadOnly && !isManagerMode && (

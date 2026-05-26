@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
 import ConfirmModal from '../common/ConfirmModal';
-import { Plus, Trash2, X, Search, ChevronLeft, ChevronRight, Filter, Edit, Key } from 'lucide-react';
+import { Plus, Trash2, X, Search, ChevronLeft, ChevronRight, Filter, Edit, Key, FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
 
 const UserManager = () => {
   const toast = useToast();
@@ -12,6 +12,12 @@ const UserManager = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => { } });
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [previewUsers, setPreviewUsers] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showConfirm = (title, message, type, onConfirm) => {
     setConfirmConfig({ isOpen: true, title, message, type, onConfirm });
@@ -28,7 +34,7 @@ const UserManager = () => {
   const itemsPerPage = 15;
 
   const [formData, setFormData] = useState({
-    username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: ''
+    username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '', managedTeamIds: []
   });
 
   useEffect(() => {
@@ -50,6 +56,86 @@ const UserManager = () => {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await api.get('/users/import-template', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Template_Import_Nhan_Su.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Tải file template thành công!');
+    } catch (err) {
+      toast.error('Không thể tải template: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImportFile(file);
+    }
+  };
+
+  const handleUploadPreview = async () => {
+    if (!importFile) {
+      toast.error('Vui lòng chọn một file Excel');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const data = new FormData();
+      data.append('file', importFile);
+      const res = await api.post('/users/import-preview', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setPreviewUsers(res.data);
+      toast.success('Xem trước dữ liệu import thành công!');
+    } catch (err) {
+      toast.error('Không thể xem trước file Excel: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleImportSubmit = async () => {
+    const validUsers = previewUsers.filter(u => u.isValid);
+    if (validUsers.length === 0) {
+      toast.error('Không có cán bộ hợp lệ nào để import');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const response = await api.post('/users/import-submit', { users: previewUsers }, { responseType: 'blob' });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Tai_khoan_nhan_su_da_tao.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success(`Import thành công! Đã tự động tải về danh sách tài khoản mật khẩu cán bộ.`);
+      setIsImportModalOpen(false);
+      setImportFile(null);
+      setPreviewUsers([]);
+      fetchData();
+    } catch (err) {
+      toast.error('Không thể submit dữ liệu import: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelImport = () => {
+    setImportFile(null);
+    setPreviewUsers([]);
+    setIsImportModalOpen(false);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
@@ -61,7 +147,7 @@ const UserManager = () => {
         await api.post('/users', { ...formData, departmentId: targetDepartment?.id });
         toast.success('Tạo nhân sự thành công!');
       }
-      setFormData({ username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '' });
+      setFormData({ username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '', managedTeamIds: [] });
       setIsModalOpen(false);
       setEditingUser(null);
       fetchData();
@@ -106,16 +192,49 @@ const UserManager = () => {
   };
 
   const filteredUsers = useMemo(() => {
-    return users.filter(u => {
-      const matchSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (u.username || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchRole = filterRole ? u.role === filterRole : true;
-      const matchRank = filterRank ? u.rank === filterRank : true;
-      const matchPosition = filterPosition ? u.position === filterPosition : true;
-      const matchTeam = filterTeamId ? u.teamId?.toString() === filterTeamId : true;
+    const teamOrder = ['ban lãnh đạo', 'đội 1', 'đội 2', 'đội 3', 'đội 4'];
+    
+    const getTeamWeight = (teamName) => {
+      if (!teamName) return 999;
+      const nameLower = teamName.toLowerCase().trim();
+      const idx = teamOrder.findIndex(name => nameLower.includes(name));
+      return idx === -1 ? 998 : idx;
+    };
 
-      return matchSearch && matchRole && matchRank && matchPosition && matchTeam;
-    });
+    const getPositionWeight = (pos) => {
+      if (!pos) return 5;
+      const p = pos.toLowerCase().trim();
+      if (p === 'trưởng phòng') return 1;
+      if (p === 'phó trưởng phòng' || p === 'phó phòng') return 2;
+      if (p === 'đội trưởng') return 3;
+      if (p === 'phó đội trưởng' || p === 'đội phó') return 4;
+      return 5;
+    };
+
+    return users
+      .filter(u => {
+        const matchSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (u.username || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const matchRole = filterRole ? u.role === filterRole : true;
+        const matchRank = filterRank ? u.rank === filterRank : true;
+        const matchPosition = filterPosition ? u.position === filterPosition : true;
+        const matchTeam = filterTeamId ? u.teamId?.toString() === filterTeamId : true;
+
+        return matchSearch && matchRole && matchRank && matchPosition && matchTeam;
+      })
+      .sort((a, b) => {
+        const teamA = a.Team ? a.Team.shortName : '';
+        const teamB = b.Team ? b.Team.shortName : '';
+        const weightTeamA = getTeamWeight(teamA);
+        const weightTeamB = getTeamWeight(teamB);
+        if (weightTeamA !== weightTeamB) return weightTeamA - weightTeamB;
+
+        const weightPosA = getPositionWeight(a.position);
+        const weightPosB = getPositionWeight(b.position);
+        if (weightPosA !== weightPosB) return weightPosA - weightPosB;
+
+        return (a.fullName || '').localeCompare(b.fullName || '');
+      });
   }, [users, searchTerm, filterRole, filterRank, filterPosition, filterTeamId]);
 
   const uniqueRanks = [...new Set(users.map(u => u.rank).filter(Boolean))];
@@ -150,8 +269,11 @@ const UserManager = () => {
           >
             <Filter className="w-4 h-4" /> Lọc
           </button>
-          <button onClick={() => { setEditingUser(null); setFormData({ username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '' }); setIsModalOpen(true); }} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
+          <button onClick={() => { setEditingUser(null); setFormData({ username: '', password: '', fullName: '', role: 'Employee', rank: '', position: '', teamId: '', managedTeamIds: [] }); setIsModalOpen(true); }} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
             <Plus className="w-4 h-4" /> Thêm nhân sự
+          </button>
+          <button onClick={() => setIsImportModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
+            <FileSpreadsheet className="w-4 h-4" /> Import Excel
           </button>
         </div>
       </div>
@@ -183,9 +305,10 @@ const UserManager = () => {
             <label className="block text-xs font-medium text-slate-500 mb-1">Vai trò hệ thống</label>
             <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="w-full border-slate-300 rounded-lg p-2 text-sm focus:ring-purple-500 focus:border-purple-500 outline-none">
               <option value="">Tất cả vai trò</option>
-              <option value="Admin">Người vận hành</option>
+              <option value="Admin">Người Quản trị</option>
+              <option value="Leader">Lãnh đạo</option>
               <option value="Manager">Quản lý</option>
-              <option value="Employee">Người dùng</option>
+              <option value="Employee">Cán bộ</option>
             </select>
           </div>
         </div>
@@ -213,13 +336,13 @@ const UserManager = () => {
                 <td className="px-4 py-2 text-slate-600">{u.position || '-'}</td>
                 <td className="px-4 py-2 text-slate-600">{u.Team ? u.Team.shortName : '-'}</td>
                 <td className="px-4 py-2">
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${u.role === 'Admin' ? 'bg-red-100 text-red-700' : u.role === 'Manager' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {u.role === 'Admin' ? 'Người vận hành' : u.role === 'Manager' ? 'Quản lý' : 'Người dùng'}
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${u.role === 'Admin' ? 'bg-red-100 text-red-700' : u.role === 'Leader' ? 'bg-purple-100 text-purple-700' : u.role === 'Manager' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    {u.role === 'Admin' ? 'Người Quản trị' : u.role === 'Leader' ? 'Lãnh đạo' : u.role === 'Manager' ? 'Quản lý' : 'Cán bộ'}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => { setEditingUser(u); setFormData({ username: u.username, password: '', fullName: u.fullName, role: u.role, rank: u.rank || '', position: u.position || '', teamId: u.teamId || '' }); setIsModalOpen(true); }} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors" title="Chỉnh sửa">
+                    <button onClick={() => { setEditingUser(u); setFormData({ username: u.username, password: '', fullName: u.fullName, role: u.role, rank: u.rank || '', position: u.position || '', teamId: u.teamId || '', managedTeamIds: Array.isArray(u.managedTeamIds) ? u.managedTeamIds : [] }); setIsModalOpen(true); }} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors" title="Chỉnh sửa">
                       <Edit className="w-4 h-4" />
                     </button>
                     <button onClick={() => handleResetPassword(u)} className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 p-1.5 rounded-lg transition-colors" title="Reset mật khẩu">
@@ -310,17 +433,270 @@ const UserManager = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Vai trò hệ thống</label>
                   <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none">
-                    <option value="Employee">Người dùng</option>
+                    <option value="Employee">Cán bộ</option>
+                    <option value="Leader">Lãnh đạo</option>
                     <option value="Manager">Quản lý</option>
-                    <option value="Admin">Người vận hành</option>
+                    <option value="Admin">Người Quản trị</option>
                   </select>
                 </div>
               </div>
+              {((formData.role === 'Manager' || formData.role === 'Leader') && (formData.position === 'Phó trưởng phòng' || formData.position === 'Phó phòng')) && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">Các đội phụ trách quản lý</label>
+                  <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto">
+                    {teams.map(t => {
+                      const isChecked = (formData.managedTeamIds || []).includes(t.id);
+                      return (
+                        <label key={t.id} className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => {
+                              const currentIds = formData.managedTeamIds || [];
+                              const nextIds = e.target.checked
+                                ? [...currentIds, t.id]
+                                : currentIds.filter(id => id !== t.id);
+                              setFormData({ ...formData, managedTeamIds: nextIds });
+                            }}
+                            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                          />
+                          <span>{t.fullName} ({t.shortName})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="pt-2 flex justify-end gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2.5 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">Hủy</button>
                 <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm shadow-purple-200">{editingUser ? 'Cập nhật' : 'Tạo mới'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isImportModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-lg">Import cán bộ từ file Excel</h3>
+                  <p className="text-xs text-slate-500">Tải lên danh sách cán bộ để tự động tạo tài khoản và mật khẩu hệ thống</p>
+                </div>
+              </div>
+              <button onClick={handleCancelImport} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              {previewUsers.length === 0 ? (
+                /* Step 1: Upload File */
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Instructions Panel */}
+                  <div className="md:col-span-1 bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+                    <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-500" /> Hướng dẫn chuẩn bị file
+                    </h4>
+                    <ul className="text-xs text-slate-600 space-y-2.5 list-disc pl-4 leading-relaxed">
+                      <li>File Excel phải chứa đúng các tiêu đề cột: <strong>Họ và tên, Cấp bậc, Chức vụ, Đội</strong>.</li>
+                      <li><strong>Cấp bậc</strong>: Chỉ hỗ trợ cấp bậc công an nhân dân (Thiếu úy, Trung úy, Thượng úy, Đại úy, Thiếu tá, Trung tá, Thượng tá, Đại tá, v.v.).</li>
+                      <li><strong>Chức vụ</strong>: Chỉ hỗ trợ: Trưởng phòng, Phó phòng, Đội trưởng, Phó đội trưởng, Cán bộ.</li>
+                      <li><strong>Đội</strong>: Phải khớp với tên Đội trong cơ sở dữ liệu (ví dụ: Ban Lãnh đạo, Đội 1, Đội 2...).</li>
+                      <li>Tài khoản (Username) sẽ được tự động tạo dựa trên tên không dấu và chữ cái đầu của họ đệm. Mật khẩu sẽ tự động được sinh ngẫu nhiên.</li>
+                    </ul>
+                    <div className="pt-2 border-t border-slate-200">
+                      <button
+                        onClick={handleDownloadTemplate}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold transition-all shadow-sm"
+                      >
+                        <Download className="w-4 h-4 text-slate-500" /> Tải file Excel template
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Upload Dropzone */}
+                  <div className="md:col-span-2 flex flex-col justify-center items-center border-2 border-dashed border-slate-300 rounded-xl p-8 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                    <div className="p-4 bg-emerald-50 text-emerald-600 rounded-full mb-4">
+                      <FileSpreadsheet className="w-10 h-10" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700 mb-1">
+                      Kéo thả file Excel vào đây hoặc click để chọn file
+                    </p>
+                    <p className="text-xs text-slate-400 mb-6">Hỗ trợ định dạng .xlsx, .xls tối đa 5MB</p>
+                    
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="excel-file-upload"
+                    />
+                    <label
+                      htmlFor="excel-file-upload"
+                      className="cursor-pointer bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm mb-4 inline-block"
+                    >
+                      Chọn file từ máy tính
+                    </label>
+
+                    {importFile && (
+                      <div className="w-full max-w-md bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between shadow-sm animate-in fade-in-50">
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <FileSpreadsheet className="w-5 h-5 text-emerald-500 shrink-0" />
+                          <div className="truncate text-left">
+                            <p className="text-xs font-semibold text-slate-700 truncate">{importFile.name}</p>
+                            <p className="text-[10px] text-slate-400">{(importFile.size / 1024).toFixed(1)} KB</p>
+                          </div>
+                        </div>
+                        <button onClick={() => setImportFile(null)} className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-slate-100">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Step 2: Preview & Validation Table */
+                <div className="space-y-4">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Tổng số dòng</p>
+                      <p className="text-xl font-bold text-slate-700">{previewUsers.length}</p>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-600">Hợp lệ để lưu</p>
+                      <p className="text-xl font-bold text-emerald-700">{previewUsers.filter(u => u.isValid).length}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-amber-600">Trùng LDAP (Thêm hậu số)</p>
+                      <p className="text-xl font-bold text-amber-700">{previewUsers.filter(u => u.warning).length}</p>
+                    </div>
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-red-600">Bị lỗi (Bỏ qua)</p>
+                      <p className="text-xl font-bold text-red-700">{previewUsers.filter(u => !u.isValid).length}</p>
+                    </div>
+                  </div>
+
+                  {/* Preview Table */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
+                    <div className="max-h-[350px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase tracking-wider font-semibold">
+                            <th className="px-4 py-3">STT</th>
+                            <th className="px-4 py-3">Họ và tên</th>
+                            <th className="px-4 py-3">Cấp bậc</th>
+                            <th className="px-4 py-3">Chức vụ</th>
+                            <th className="px-4 py-3">Đội</th>
+                            <th className="px-4 py-3">Username (Gen)</th>
+                            <th className="px-4 py-3">Mật khẩu (Gen)</th>
+                            <th className="px-4 py-3">Trạng thái / Cảnh báo</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {previewUsers.map((u, i) => (
+                            <tr key={u.id} className={`hover:bg-slate-50/50 transition-colors ${!u.isValid ? 'bg-red-50/20' : u.warning ? 'bg-amber-50/20' : ''}`}>
+                              <td className="px-4 py-2 text-slate-400">{i + 1}</td>
+                              <td className="px-4 py-2 font-semibold text-slate-700">{u.fullName || '-'}</td>
+                              <td className="px-4 py-2 text-slate-600">{u.rank || '-'}</td>
+                              <td className="px-4 py-2 text-slate-600">{u.position || '-'}</td>
+                              <td className="px-4 py-2 text-slate-600">{u.teamName || '-'}</td>
+                              <td className="px-4 py-2 font-mono text-purple-700 font-semibold">{u.username || '-'}</td>
+                              <td className="px-4 py-2 font-mono text-slate-600">{u.password || '-'}</td>
+                              <td className="px-4 py-2">
+                                {!u.isValid ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="inline-flex items-center gap-1 text-red-600 font-semibold">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Lỗi dữ liệu
+                                    </span>
+                                    <span className="text-[10px] text-red-500 font-medium leading-tight">{u.errors.join(', ')}</span>
+                                  </div>
+                                ) : u.warning ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="inline-flex items-center gap-1 text-amber-600 font-semibold">
+                                      <AlertTriangle className="w-3.5 h-3.5" /> Trùng LDAP
+                                    </span>
+                                    <span className="text-[10px] text-amber-500 font-medium leading-tight">{u.warning}</span>
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Hợp lệ
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
+              <div>
+                {previewUsers.length > 0 && (
+                  <button
+                    onClick={() => setPreviewUsers([])}
+                    className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-semibold transition-colors"
+                    disabled={isSubmitting}
+                  >
+                    Chọn file khác
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelImport}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-semibold transition-colors"
+                  disabled={isUploading || isSubmitting}
+                >
+                  Hủy
+                </button>
+                
+                {previewUsers.length === 0 ? (
+                  <button
+                    onClick={handleUploadPreview}
+                    disabled={!importFile || isUploading}
+                    className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-2"
+                  >
+                    {isUploading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Đang đọc file...
+                      </>
+                    ) : (
+                      'Tải lên & Xem trước'
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleImportSubmit}
+                    disabled={previewUsers.filter(u => u.isValid).length === 0 || isSubmitting}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Đang tạo & Tải về file...
+                      </>
+                    ) : (
+                      `Tạo ${previewUsers.filter(u => u.isValid).length} tài khoản`
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

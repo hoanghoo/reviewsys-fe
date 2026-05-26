@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { LogIn, User, Lock, AlertCircle } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -29,7 +30,7 @@ const Login = () => {
     try {
       const user = await login(username, password);
       if (user.role === 'Admin') navigate('/admin');
-      else if (user.role === 'Manager') navigate('/manager');
+      else if (user.role === 'Manager' || user.role === 'Leader') navigate('/manager');
       else navigate('/employee');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to login');
@@ -39,37 +40,37 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background decoration */}
-      <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply filter blur-2xl opacity-15 animate-blob"></div>
-      <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-2xl opacity-10 animate-blob animation-delay-2000"></div>
-      <div className="absolute -bottom-8 left-20 w-72 h-72 bg-purple-700 rounded-full mix-blend-multiply filter blur-2xl opacity-10 animate-blob animation-delay-4000"></div>
+      <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-100 rounded-full mix-blend-multiply filter blur-2xl opacity-70 animate-blob"></div>
+      <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-200/60 rounded-full mix-blend-multiply filter blur-2xl opacity-60 animate-blob animation-delay-2000"></div>
+      <div className="absolute -bottom-8 left-20 w-72 h-72 bg-purple-100 rounded-full mix-blend-multiply filter blur-2xl opacity-60 animate-blob animation-delay-4000"></div>
       
-      <div className="w-full max-w-md bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20 transform transition-all">
+      <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/80 border border-slate-100 transform transition-all relative z-10">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Logo" className="w-24 h-24 object-contain mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white tracking-tight">HỆ THỐNG CHẤM ĐIỂM</h2>
-          <p className="text-slate-400 mt-2 text-[10px] uppercase tracking-wider font-bold">Phòng An ninh mạng & PCTP sử dụng công nghệ cao</p>
+          <img src={logo} alt="Logo" className="w-24 h-24 object-contain mx-auto mb-4" />
+          <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">HỆ THỐNG CHẤM ĐIỂM</h2>
+          <p className="text-slate-500 mt-2 text-[10px] uppercase tracking-wider font-bold">Phòng An ninh mạng & PCTP sử dụng công nghệ cao</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl flex items-center gap-3 animate-pulse">
-            <AlertCircle className="w-5 h-5 text-red-400" />
-            <p className="text-red-400 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 animate-pulse">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <p className="text-red-700 text-sm font-medium">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 ml-1">Username</label>
+            <label className="text-sm font-semibold text-slate-600 ml-1">Username</label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-slate-400 group-focus-within:text-purple-400 transition-colors" />
+                <User className="h-5 w-5 text-slate-400 group-focus-within:text-purple-600 transition-colors" />
               </div>
               <input
                 type="text"
-                className="w-full bg-slate-800/50 border border-slate-700 text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all placeholder:text-slate-500"
-                placeholder="Enter your username"
+                className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 focus:bg-white transition-all placeholder:text-slate-400 font-medium"
+                placeholder="Nhập tên đăng nhập"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -78,14 +79,14 @@ const Login = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 ml-1">Password</label>
+            <label className="text-sm font-semibold text-slate-600 ml-1">Password</label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-purple-400 transition-colors" />
+                <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-purple-600 transition-colors" />
               </div>
               <input
                 type="password"
-                className="w-full bg-slate-800/50 border border-slate-700 text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all placeholder:text-slate-500"
+                className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 focus:bg-white transition-all placeholder:text-slate-400"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -97,12 +98,12 @@ const Login = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-purple-900/25 transform transition-all active:scale-95 flex items-center justify-center gap-2 mt-4 cursor-pointer"
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3.5 px-4 rounded-xl shadow-lg shadow-purple-200/80 transform transition-all active:scale-95 flex items-center justify-center gap-2 mt-4 cursor-pointer"
           >
             {isLoading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              'Sign In'
+              'Đăng Nhập'
             )}
           </button>
         </form>

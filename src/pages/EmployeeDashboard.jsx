@@ -3,7 +3,8 @@ import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReviewList from '../components/employee/ReviewList';
 import Profile from '../components/common/Profile';
-import { LayoutDashboard, LogOut, User as UserIcon } from 'lucide-react';
+import { LayoutDashboard, LogOut, User as UserIcon, Shield, Users } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
@@ -19,10 +20,10 @@ const EmployeeDashboard = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm flex-shrink-0">
         <div className="p-5 border-b border-slate-100 flex items-center gap-3">
-          <img src="/logo.png" alt="Logo" className="w-12 h-12 object-contain" />
+          <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
           <div>
-            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">iPRS</h1>
-            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Dashboard Người dùng</p>
+            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPY</h1>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Dashboard Cán bộ</p>
           </div>
         </div>
 
@@ -52,6 +53,24 @@ const EmployeeDashboard = () => {
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
             <p className="text-xs text-slate-500 mt-0.5">{user?.rank} {user?.position ? `- ${user?.position}` : ''}</p>
           </div>
+          {user?.role === 'Admin' && (
+            <div className="space-y-1.5 mb-4">
+              <Link
+                to="/admin/teams"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-xl transition-all shadow-sm"
+              >
+                <Shield className="w-3.5 h-3.5 text-slate-400" />
+                Trang Quản trị (Admin)
+              </Link>
+              <Link
+                to="/manager/team-tracking"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-xl transition-all shadow-sm"
+              >
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+                Trang Quản lý (Manager)
+              </Link>
+            </div>
+          )}
           <button 
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"

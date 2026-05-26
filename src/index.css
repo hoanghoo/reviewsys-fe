@@ -1,41 +1,41 @@
 @import "tailwindcss";
 
 @theme {
-  --color-purple-50: #f5f6f2;
-  --color-purple-100: #e7e9dd;
-  --color-purple-200: #cbd0bc;
-  --color-purple-300: #adb599;
-  --color-purple-400: #8f9a76;
-  --color-purple-500: #4f5d2f;
-  --color-purple-600: #424e27;
-  --color-purple-700: #353e20;
-  --color-purple-800: #282e18;
-  --color-purple-900: #1b1f10;
-  --color-purple-950: #0e1008;
+  --color-purple-50: #e8f6ec;
+  --color-purple-100: #d4edd9;
+  --color-purple-200: #a9dcba;
+  --color-purple-300: #7eca9a;
+  --color-purple-400: #53b97b;
+  --color-purple-500: #28a745;
+  --color-purple-600: #208637;
+  --color-purple-700: #186429;
+  --color-purple-800: #10431b;
+  --color-purple-900: #08210e;
+  --color-purple-950: #041107;
 
-  --color-blue-50: #f5f6f2;
-  --color-blue-100: #e7e9dd;
-  --color-blue-200: #cbd0bc;
-  --color-blue-300: #adb599;
-  --color-blue-400: #8f9a76;
-  --color-blue-500: #4f5d2f;
-  --color-blue-600: #424e27;
-  --color-blue-700: #353e20;
-  --color-blue-800: #282e18;
-  --color-blue-900: #1b1f10;
-  --color-blue-950: #0e1008;
+  --color-blue-50: #e8f6ec;
+  --color-blue-100: #d4edd9;
+  --color-blue-200: #a9dcba;
+  --color-blue-300: #7eca9a;
+  --color-blue-400: #53b97b;
+  --color-blue-500: #28a745;
+  --color-blue-600: #208637;
+  --color-blue-700: #186429;
+  --color-blue-800: #10431b;
+  --color-blue-900: #08210e;
+  --color-blue-950: #041107;
 
-  --color-emerald-50: #f5f6f2;
-  --color-emerald-100: #e7e9dd;
-  --color-emerald-200: #cbd0bc;
-  --color-emerald-300: #adb599;
-  --color-emerald-400: #8f9a76;
-  --color-emerald-500: #4f5d2f;
-  --color-emerald-600: #424e27;
-  --color-emerald-700: #353e20;
-  --color-emerald-800: #282e18;
-  --color-emerald-900: #1b1f10;
-  --color-emerald-950: #0e1008;
+  --color-emerald-50: #e8f6ec;
+  --color-emerald-100: #d4edd9;
+  --color-emerald-200: #a9dcba;
+  --color-emerald-300: #7eca9a;
+  --color-emerald-400: #53b97b;
+  --color-emerald-500: #28a745;
+  --color-emerald-600: #208637;
+  --color-emerald-700: #186429;
+  --color-emerald-800: #10431b;
+  --color-emerald-900: #08210e;
+  --color-emerald-950: #041107;
 }
 
 :root {

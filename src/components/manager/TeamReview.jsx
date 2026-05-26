@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
-import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info } from 'lucide-react';
+import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info, UserCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 import SelfReviewForm from '../employee/SelfReviewForm';
 
 const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const { user: currentUser } = useAuth();
+  const isLeader = currentUser?.role === 'Admin' || 
+                   ['Trưởng phòng', 'Phó trưởng phòng', 'Phó phòng'].includes(currentUser?.position);
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [activePeriod, setActivePeriod] = useState(null);
@@ -122,10 +124,12 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     setEditFeedback(fb);
   };
 
-  const handleApprove = async (formData = {}) => {
-    // Collect latest table data from the DOM
+  const handleApprove = async (targetStatus) => {
+    if (!selectedReview) return;
+    
+    // Extract DOM data
     const tableData = { scores: [], notes: [] };
-    const formEl = document.querySelector('.docx-preview');
+    const formEl = document.getElementById('manager-review-form');
     if (formEl) {
        const scoreInputs = formEl.querySelectorAll('.score-input');
        const noteInputs = formEl.querySelectorAll('.note-input');
@@ -135,21 +139,21 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
 
     const finalFeedback = {
        ...editFeedback,
-       tableData, // Save the manager's edited scores/notes from the table
-       commander: editFeedback.commander // Preserve commander name
+       tableData,
+       commander: editFeedback.commander 
     };
 
     try {
       await api.put(`/reviews/${selectedReview.id}/approve`, {
-        status: 'Reviewed',
+        status: targetStatus,
         score: editScore,
         feedback: finalFeedback
       });
-      toast.success('Đã duyệt đánh giá thành công!');
+      toast.success(targetStatus === 'Submitted' ? 'Đã trả lại đánh giá cho chỉ huy!' : 'Đã duyệt đánh giá thành công!');
       setSelectedReview(null);
       fetchTeamData(selectedPeriodId, pagination?.page || 1);
     } catch (err) {
-      toast.error('Lỗi duyệt đánh giá: ' + (err.response?.data?.message || err.message));
+      toast.error('Lỗi thao tác đánh giá: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -239,9 +243,9 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
   const getStatusLabel = (status) => {
     switch (status) {
       case 'Completed':
-      case 'ManagerReviewed':
       case 'Reviewed': return <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold border border-emerald-100">Hoàn tất</span>;
-      case 'Submitted': return <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-bold border border-amber-100">Chờ phê duyệt</span>;
+      case 'ManagerReviewed': return <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold border border-blue-100">Chờ Lãnh đạo duyệt</span>;
+      case 'Submitted': return <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-bold border border-amber-100">Chờ chỉ huy duyệt</span>;
       default: return <span className="text-slate-500 bg-slate-50 px-2 py-0.5 rounded text-xs font-medium border border-slate-100">Chưa nộp</span>;
     }
   };
@@ -264,7 +268,8 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           period={reviewPeriodProps}
           employeeProfile={selectedReview.user}
           readOnly={true}
-          isManagerMode={currentUser.role !== 'Admin'}
+          isManagerMode={true}
+          isLeader={isLeader}
           onTotalScoreChange={(score) => setEditScore(score)}
           onApprove={handleApprove}
           onBack={() => setSelectedReview(null)}
@@ -382,7 +387,19 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           }`}
         >
           <div className={`p-3 rounded-xl ${selectedStatus === 'Submitted' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-600'}`}><Clock className="w-4 h-4" /></div>
-          <div><p className={`text-xs font-medium ${selectedStatus === 'Submitted' ? 'text-amber-50' : 'text-slate-500'}`}>Chờ phê duyệt</p><p className="text-xl font-bold">{stats.submitted}</p></div>
+          <div><p className={`text-xs font-medium ${selectedStatus === 'Submitted' ? 'text-amber-50' : 'text-slate-500'}`}>Chờ chỉ huy duyệt</p><p className="text-xl font-bold">{stats.submitted}</p></div>
+        </div>
+
+        <div 
+          onClick={() => { setSelectedStatus('ManagerReviewed'); setPagination(prev => ({...prev, page: 1})); }}
+          className={`cursor-pointer p-4 rounded-2xl shadow-sm border transition-all flex items-center gap-4 ${
+            selectedStatus === 'ManagerReviewed' 
+            ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-200' 
+            : 'bg-white border-slate-200 text-slate-800 hover:border-blue-300'
+          }`}
+        >
+          <div className={`p-3 rounded-xl ${selectedStatus === 'ManagerReviewed' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'}`}><UserCheck className="w-4 h-4" /></div>
+          <div><p className={`text-xs font-medium ${selectedStatus === 'ManagerReviewed' ? 'text-blue-50' : 'text-slate-500'}`}>Chờ lãnh đạo duyệt</p><p className="text-xl font-bold">{stats.managerReviewed || 0}</p></div>
         </div>
 
         <div 
@@ -474,7 +491,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                           >
                             <Eye className="w-4 h-4" /> 
-                            {currentUser.role === 'Admin' || review.status === 'Reviewed' || review.status === 'Completed' ? 'Xem' : 'Xem & Duyệt'}
+                            {review.status === 'Reviewed' || review.status === 'Completed' ? 'Xem' : 'Xem & Duyệt'}
                           </button>
                         </div>
                       ) : (
