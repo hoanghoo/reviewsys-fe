@@ -412,6 +412,15 @@ const UserManager = () => {
                   </div>
                 )}
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Đội/Phòng</label>
+                <select value={formData.teamId} onChange={e => {
+                  setFormData({ ...formData, teamId: e.target.value, position: '' }); // reset position when team changes
+                }} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none">
+                  <option value="">-- Chọn đội --</option>
+                  {teams.map(t => <option key={t.id} value={t.id}>{t.shortName}</option>)}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Cấp bậc</label>
@@ -419,39 +428,32 @@ const UserManager = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Chức vụ</label>
-                  <input value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none" placeholder="Ví dụ: Đội trưởng" />
+                  {(() => {
+                    const selectedTeam = teams.find(t => t.id == formData.teamId);
+                    const isLeadershipTeam = selectedTeam && (selectedTeam.shortName === 'Ban Lãnh đạo' || selectedTeam.id === 7);
+                    const positionOptions = !formData.teamId 
+                      ? [] 
+                      : isLeadershipTeam 
+                        ? ['Trưởng phòng', 'Phó phòng', 'Cán bộ'] 
+                        : ['Đội trưởng', 'Phó đội trưởng', 'Đội phó', 'Cán bộ'];
+                    
+                    return (
+                      <select 
+                        value={formData.position} 
+                        onChange={e => setFormData({ ...formData, position: e.target.value })} 
+                        className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none bg-white"
+                        disabled={!formData.teamId}
+                      >
+                        <option value="">-- Chọn chức vụ --</option>
+                        {positionOptions.map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    );
+                  })()}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Đội</label>
-                  <select value={formData.teamId} onChange={e => setFormData({ ...formData, teamId: e.target.value })} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none">
-                    <option value="">-- Chọn đội --</option>
-                    {teams.map(t => <option key={t.id} value={t.id}>{t.shortName}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Vai trò hệ thống</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { val: 'Employee', label: 'Cán bộ' },
-                      { val: 'Manager', label: 'Quản lý' },
-                      { val: 'Leader', label: 'Lãnh đạo' },
-                      { val: 'Admin', label: 'Quản trị viên' }
-                    ].map(r => (
-                      <label key={r.val} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input type="checkbox" checked={formData.roles && formData.roles.includes(r.val)} onChange={(e) => {
-                          const currentRoles = formData.roles || [];
-                          const nextRoles = e.target.checked ? [...currentRoles, r.val] : currentRoles.filter(x => x !== r.val);
-                          setFormData({ ...formData, roles: nextRoles.length ? nextRoles : ['Employee'] });
-                        }} className="rounded border-slate-300 text-purple-600 focus:ring-purple-500" />
-                        {r.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {((formData.roles && (formData.roles.includes("Manager") || formData.roles.includes("Leader"))) && (formData.position === 'Phó trưởng phòng' || formData.position === 'Phó phòng')) && (
+              {(formData.position === 'Phó trưởng phòng' || formData.position === 'Phó phòng') && (
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
                   <label className="block text-sm font-semibold text-slate-700">Các đội phụ trách quản lý</label>
                   <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto">
