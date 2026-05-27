@@ -172,13 +172,11 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
       setProfile(reviewedUser);
 
       // 3. Determine Commander Name
-      // If the viewer is a Manager/Admin, they are the commander
-      if ((currentUser.roles && (currentUser.roles.includes("Manager") || currentUser.roles.includes("Admin")))) {
-        setCommanderName(currentUser.fullName);
-      } else {
-        // Otherwise use the employee's manager
-        setCommanderName(reviewedUser.managerName || '');
-      }
+      // Default to the team captain's name. 
+      // - reviewedUser.managerName is populated when employee views their own profile.
+      // - currentUser.managerName is populated when a team manager/deputy views their team's member.
+      const defaultCommander = reviewedUser.managerName || currentUser.managerName || '';
+      setCommanderName(defaultCommander);
 
       // Fetch Template HTML
       if (period?.templateId) {
@@ -205,9 +203,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
             setCommanderRank(parsedFeedback.commanderRank || '');
             setCommanderPosition(parsedFeedback.commanderPosition || '');
           } else if (isManagerMode && !isReadOnly) {
-            setCommanderName(currentUser.fullName || '');
-            setCommanderRank(currentUser.rank || '');
-            setCommanderPosition(currentUser.position || '');
+            setCommanderName(defaultCommander);
           }
         } catch (e) { }
       }
@@ -317,22 +313,6 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
 
     if (onTotalScoreChange) {
       onTotalScoreChange(isManagerMode ? commanderTotal : employeeTotal);
-    }
-      // ------------------------------------------------------------
-    // New: Sync commander‑score fields for leaders so details show
-    // ------------------------------------------------------------
-    if (actualIsLeader && !isAdminMode) {
-      // Copy every employee score into the corresponding commander field
-      const commanderInputs = formRef.current.querySelectorAll('.commander-score');
-      commanderInputs.forEach(ci => {
-        const id = ci.getAttribute('data-id');
-        // The employee field uses the same base id without the "_commander" suffix
-        const baseId = id.replace('_commander', '');
-        const src = formRef.current.querySelector(`.score-input[data-id="${baseId}"]`);
-        if (src) {
-          ci.value = src.value;
-        }
-      });
     }
   };
 
@@ -506,8 +486,8 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
             profile?.Team?.shortName ||
             profile?.Team?.name ||
             profile?.teamName || '',
-          month: reviewMonth,
-          year: reviewYear,
+          month: period?.name?.match(/Tháng\s+(\d+)/)?.[1] || new Date().getMonth() + 1,
+          year: period?.name?.match(/(\d{4})/)?.[1] || new Date().getFullYear(),
           classification: classifyScore(totalScore),
           commander: commanderName || period?.Reviews?.[0]?.feedback?.commander || ''
         }
@@ -518,14 +498,10 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
 
       const response = await api.post('/reviews/export-draft-docx', payload, { responseType: 'blob' });
 
-      const periodName = period?.name ? removeVietnameseTones(period.name) : 'Ky_Danh_Gia';
-      const fullName = removeVietnameseTones(employeeProfile?.fullName || profile?.fullName || 'NhanVien');
-      const fileName = `BangDanhGia_${periodName}_${fullName}.docx`;
-
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', fileName);
+      link.setAttribute('download', `Ban_Danh_Gia_${profile?.fullName || 'NhanVien'}.docx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -543,7 +519,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
     let rawTeamName = profile?.Team?.shortName || profile?.Team?.fullName || profile?.Team?.name || '';
     const teamName = removeVietnameseTones(rawTeamName) || 'Doi';
     const fullName = removeVietnameseTones(profile?.fullName || 'NhanVien');
-    
+
     return `${periodName}_${teamName}_${fullName}_Document${ext}`;
   };
 
@@ -775,7 +751,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                     </div>
                   )}
                   {period?.Reviews?.[0]?.attachmentFile && !fileInput && (
-                    <div 
+                    <div
                       className="mt-2 text-xs text-emerald-700 font-medium flex items-center gap-1.5 cursor-pointer hover:underline"
                       onClick={() => handleDownloadAttachment(period.Reviews[0].id, period.Reviews[0].attachmentFile)}
                     >
@@ -793,7 +769,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                   <FileText className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                   <div className="w-full">
                     <p className="font-bold text-emerald-800 text-sm mb-2">File đính kèm:</p>
-                    <div 
+                    <div
                       className="mt-1 text-sm text-emerald-700 font-bold cursor-pointer hover:underline inline-flex items-center gap-1"
                       onClick={() => handleDownloadAttachment(period.Reviews[0].id, period.Reviews[0].attachmentFile)}
                     >
@@ -855,7 +831,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                             {(() => {
                               let text = log.action;
                               let color = 'text-blue-600';
-                              
+
                               if (log.action === 'Submitted') {
                                 if (log.role === 'Cán bộ') {
                                   text = 'Cán bộ nộp đánh giá';

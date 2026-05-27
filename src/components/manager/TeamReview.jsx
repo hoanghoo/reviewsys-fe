@@ -41,6 +41,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
   const [editScore, setEditScore] = useState('');
   const [editFeedback, setEditFeedback] = useState({ managerNote: '', commander: '' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const isManager = currentUser?.roles && currentUser.roles.includes("Manager");
   const [selectedStatus, setSelectedStatus] = useState(isManager && !isLeader ? 'Submitted' : '');
   const [selectedPeriodId, setSelectedPeriodId] = useState(propPeriodId || '');
@@ -63,6 +64,19 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
     return [...new Set(years)].sort((a, b) => b - a);
   }, [periods]);
 
+  const canApprove = (member) => {
+    if (isAdminView) return false;
+    if (!currentUser) return false;
+    if (currentUser.roles?.includes("Leader") || currentUser.position === 'Trưởng phòng') return true;
+    if (currentUser.position === 'Phó trưởng phòng' || currentUser.position === 'Phó phòng') {
+      return Array.isArray(currentUser.managedTeamIds) && currentUser.managedTeamIds.includes(member.teamId);
+    }
+    if (currentUser.roles?.includes("Manager")) {
+      return member.teamId === currentUser.teamId;
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (availableYears.length > 0 && !availableYears.includes(parseInt(exportYear))) {
       setExportYear(availableYears[0]);
@@ -73,11 +87,22 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
     fetchInitialData();
   }, []);
 
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      if (searchTerm !== debouncedSearchTerm) {
+        setPagination(prev => ({...prev, page: 1}));
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     if (selectedPeriodId) {
       fetchTeamData(selectedPeriodId, pagination?.page || 1);
     }
-  }, [selectedPeriodId, selectedDeptId, selectedTeamId, selectedStatus, searchTerm, pagination?.page]);
+  }, [selectedPeriodId, selectedDeptId, selectedTeamId, selectedStatus, debouncedSearchTerm, pagination?.page]);
 
   const fetchInitialData = async () => {
     try {
@@ -114,8 +139,8 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
       if (selectedStatus) {
         url += `&status=${selectedStatus}`;
       }
-      if (searchTerm) {
-        url += `&search=${encodeURIComponent(searchTerm)}`;
+      if (debouncedSearchTerm) {
+        url += `&search=${encodeURIComponent(debouncedSearchTerm)}`;
       }
       const teamRes = await api.get(url);
       setTeamData(teamRes.data.data || []);
@@ -300,7 +325,9 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
     }
   };
 
-  if (loading) return <div className="p-12 text-center text-slate-500">Đang tải danh sách đội...</div>;
+  if (loading && !activePeriod && periods.length === 0) {
+    return <div className="p-12 text-center text-slate-500">Đang tải dữ liệu...</div>;
+  }
 
   if (!activePeriod) {
     const now = new Date();
@@ -366,10 +393,10 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
         <SelfReviewForm 
           period={reviewPeriodProps}
           employeeProfile={selectedReview.user}
-          readOnly={selectedReview.status === 'Reviewed' || selectedReview.status === 'Completed' || isAdminView || (currentUser?.roles?.includes("Admin") && !currentUser?.roles?.includes("Manager") && !currentUser?.roles?.includes("Leader"))}
+          readOnly={selectedReview.status === 'Reviewed' || selectedReview.status === 'Completed' || !canApprove(selectedReview.user)}
           isManagerMode={true}
           isLeader={isLeader}
-          isAdminMode={isAdminView || (currentUser?.roles?.includes("Admin") && !currentUser?.roles?.includes("Manager") && !currentUser?.roles?.includes("Leader"))}
+          isAdminMode={isAdminView || !canApprove(selectedReview.user)}
           onTotalScoreChange={(score) => setEditScore(score)}
           onApprove={handleApprove}
           onBack={() => setSelectedReview(null)}
@@ -402,7 +429,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
               type="text"
               placeholder="Tìm tên nhân viên..."
               value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setPagination(prev => ({...prev, page: 1})); }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
             />
           </div>
@@ -529,9 +556,23 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
                 <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {teamData.map((member) => {
-                const review = member.ReviewsReceived && member.ReviewsReceived[0];
+            <tbody className={`divide-y divide-slate-50 transition-opacity duration-200 ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+              {loading && teamData.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-4 py-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="font-medium">Đang tải dữ liệu...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : !loading && teamData.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-4 py-8 text-center text-slate-500 italic">Không tìm thấy nhân viên nào phù hợp.</td>
+                </tr>
+              ) : (
+                teamData.map((member) => {
+                  const review = member.ReviewsReceived && member.ReviewsReceived[0];
                 return (
                   <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-4 whitespace-nowrap">
@@ -600,7 +641,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                           >
                             <Eye className="w-4 h-4" /> 
-                            {review.status === 'Reviewed' || review.status === 'Completed' || isAdminView || (currentUser?.roles?.includes("Admin") && !currentUser?.roles?.includes("Manager") && !currentUser?.roles?.includes("Leader")) ? 'Xem' : 'Xem & Duyệt'}
+                            {review.status === 'Reviewed' || review.status === 'Completed' || !canApprove(member) ? 'Xem' : 'Xem & Duyệt'}
                           </button>
                         </div>
                       ) : (
@@ -609,7 +650,8 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
                     </td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>

@@ -109,7 +109,7 @@ const UserManager = () => {
     setIsSubmitting(true);
     try {
       const response = await api.post('/users/import-submit', { users: previewUsers }, { responseType: 'blob' });
-      
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -162,14 +162,20 @@ const UserManager = () => {
       `Bạn có chắc chắn muốn reset mật khẩu cho tài khoản ${user.username}? Mật khẩu mới sẽ được tạo ngẫu nhiên.`,
       'warning',
       async () => {
-        try {
-          const newPassword = Math.random().toString(36).slice(-8); // 8 characters
-          await api.put(`/users/${user.id}`, { ...user, password: newPassword });
-          await navigator.clipboard.writeText(newPassword);
-          toast.success(`Reset mật khẩu thành công! Mật khẩu mới đã được lưu vào clipboard.`);
-        } catch (err) {
-          toast.error('Lỗi reset mật khẩu: ' + (err.response?.data?.message || err.message));
-        }
+          try {
+            const newPassword = Math.random().toString(36).slice(-8); // 8 characters
+            await api.put(`/users/${user.id}`, { ...user, password: newPassword });
+            
+            try {
+              await navigator.clipboard.writeText(newPassword);
+              toast.success(`Reset mật khẩu thành công! Mật khẩu mới đã được lưu vào clipboard.`);
+            } catch (clipErr) {
+              window.prompt('Reset thành công! Vui lòng copy mật khẩu mới bên dưới:', newPassword);
+              toast.success('Đã reset mật khẩu thành công!');
+            }
+          } catch (err) {
+            toast.error('Lỗi reset mật khẩu: ' + (err.response?.data?.message || err.message));
+          }
       }
     );
   };
@@ -193,7 +199,7 @@ const UserManager = () => {
 
   const filteredUsers = useMemo(() => {
     const teamOrder = ['ban lãnh đạo', 'đội 1', 'đội 2', 'đội 3', 'đội 4'];
-    
+
     const getTeamWeight = (teamName) => {
       if (!teamName) return 999;
       const nameLower = teamName.toLowerCase().trim();
@@ -431,16 +437,16 @@ const UserManager = () => {
                   {(() => {
                     const selectedTeam = teams.find(t => t.id == formData.teamId);
                     const isLeadershipTeam = selectedTeam && (selectedTeam.shortName === 'Ban Lãnh đạo' || selectedTeam.id === 7);
-                    const positionOptions = !formData.teamId 
-                      ? [] 
-                      : isLeadershipTeam 
-                        ? ['Trưởng phòng', 'Phó phòng', 'Cán bộ'] 
+                    const positionOptions = !formData.teamId
+                      ? []
+                      : isLeadershipTeam
+                        ? ['Trưởng phòng', 'Phó phòng', 'Cán bộ']
                         : ['Đội trưởng', 'Đội phó', 'Cán bộ'];
-                    
+
                     return (
-                      <select 
-                        value={formData.position} 
-                        onChange={e => setFormData({ ...formData, position: e.target.value })} 
+                      <select
+                        value={formData.position}
+                        onChange={e => setFormData({ ...formData, position: e.target.value })}
                         className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none bg-white"
                         disabled={!formData.teamId}
                       >
@@ -544,7 +550,7 @@ const UserManager = () => {
                       Kéo thả file Excel vào đây hoặc click để chọn file
                     </p>
                     <p className="text-xs text-slate-400 mb-6">Hỗ trợ định dạng .xlsx, .xls tối đa 5MB</p>
-                    
+
                     <input
                       type="file"
                       accept=".xlsx, .xls"
@@ -676,7 +682,7 @@ const UserManager = () => {
                 >
                   Hủy
                 </button>
-                
+
                 {previewUsers.length === 0 ? (
                   <button
                     onClick={handleUploadPreview}
