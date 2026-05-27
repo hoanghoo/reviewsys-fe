@@ -97,7 +97,7 @@ const ReviewPeriodManager = () => {
   };
 
   if (viewingPeriodId) {
-    return <TeamReview periodId={viewingPeriodId} onBack={() => setViewingPeriodId(null)} />;
+    return <TeamReview periodId={viewingPeriodId} onBack={() => setViewingPeriodId(null)} isAdminView={true} />;
   }
 
   return (

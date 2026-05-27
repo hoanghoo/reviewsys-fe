@@ -180,7 +180,7 @@ const TeamTracking = () => {
                 <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group" onClick={() => handleSort('position')}>
                   <div className="flex items-center">Chức vụ {renderSortIcon('position')}</div>
                 </th>
-                <th className="px-6 py-4">Email nội bộ</th>
+
                 <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group" onClick={() => handleSort('role')}>
                   <div className="flex items-center">Vai trò {renderSortIcon('role')}</div>
                 </th>
@@ -212,12 +212,7 @@ const TeamTracking = () => {
                       {u.position || 'Cán bộ'}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <Mail className="w-3.5 h-3.5 text-slate-300" />
-                      <span className="text-xs">{u.username}@security.gov.vn</span>
-                    </div>
-                  </td>
+
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
                       (u.roles && u.roles.includes("Manager")) 

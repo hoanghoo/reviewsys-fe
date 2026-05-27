@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 
 import SelfReviewForm from '../employee/SelfReviewForm';
 
-const TeamReview = ({ periodId: propPeriodId, onBack }) => {
+const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => {
   const { user: currentUser } = useAuth();
   const isLeader = (currentUser?.roles && currentUser.roles.includes("Leader")) || 
                    ['Trưởng phòng', 'Phó trưởng phòng', 'Phó phòng'].includes(currentUser?.position);
@@ -151,6 +151,38 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
     } catch (err) {
       toast.error('Lỗi thao tác đánh giá: ' + (err.response?.data?.message || err.message));
     }
+  const handleDownloadAttachment = (reviewId, fileName) => {
+    // Determine the real file extension
+    const ext = fileName ? fileName.substring(fileName.lastIndexOf('.')) : '.docx';
+    
+    api.get(`/reviews/${reviewId}/attachment`, { responseType: 'blob' })
+      .then(res => {
+        // We let backend handle the filename via Content-Disposition if possible, 
+        // but since we might not have access to headers easily in axios without full response,
+        // we'll extract filename from headers or use a fallback.
+        const contentDisposition = res.headers['content-disposition'];
+        let finalFileName = `DinhKem_${reviewId}${ext}`;
+        
+        if (contentDisposition) {
+          const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+          if (fileNameMatch && fileNameMatch.length === 2) {
+            finalFileName = fileNameMatch[1];
+          }
+        }
+        
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', finalFileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success('Đã tải file đính kèm!');
+      })
+      .catch(err => {
+        console.error('Download error:', err);
+        toast.error('Lỗi tải file đính kèm: ' + (err.response?.data?.message || err.message));
+      });
   };
 
   const handleExportWord = async (member) => {
@@ -315,6 +347,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
           readOnly={true}
           isManagerMode={true}
           isLeader={isLeader}
+          isAdminMode={isAdminView || (currentUser?.roles?.includes("Admin") && !currentUser?.roles?.includes("Manager") && !currentUser?.roles?.includes("Leader"))}
           onTotalScoreChange={(score) => setEditScore(score)}
           onApprove={handleApprove}
           onBack={() => setSelectedReview(null)}
@@ -522,6 +555,15 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
                     <td className="px-6 py-4 text-right">
                       {review ? (
                         <div className="flex items-center justify-end gap-2">
+                          {review.attachmentFile && (
+                            <button
+                              onClick={() => handleDownloadAttachment(review.id, review.attachmentFile)}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                              title="Tải đính kèm"
+                            >
+                              <FileText className="w-4 h-4" /> Đính kèm
+                            </button>
+                          )}
                           {(review.status === 'Reviewed' || review.status === 'Completed') && (
                             <button
                               onClick={() => handleExportWord(member)}
@@ -536,7 +578,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack }) => {
                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                           >
                             <Eye className="w-4 h-4" /> 
-                            {review.status === 'Reviewed' || review.status === 'Completed' ? 'Xem' : 'Xem & Duyệt'}
+                            {review.status === 'Reviewed' || review.status === 'Completed' || isAdminView || (currentUser?.roles?.includes("Admin") && !currentUser?.roles?.includes("Manager") && !currentUser?.roles?.includes("Leader")) ? 'Xem' : 'Xem & Duyệt'}
                           </button>
                         </div>
                       ) : (
