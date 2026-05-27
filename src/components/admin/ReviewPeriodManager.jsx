@@ -58,7 +58,11 @@ const ReviewPeriodManager = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/review-periods', formData);
+      const payload = { ...formData };
+      if (!payload.templateId) {
+        payload.templateId = null;
+      }
+      await api.post('/review-periods', payload);
       setFormData({ name: '', monthYear: '', startDate: '', endDate: '', status: 'Open', templateId: '', teamIds: [] });
       setIsModalOpen(false);
       toast.success('Tạo kỳ đánh giá thành công!');
@@ -96,6 +100,16 @@ const ReviewPeriodManager = () => {
     }
   };
 
+  const handleOpenModal = () => {
+    let latestTemplateId = '';
+    if (templates && templates.length > 0) {
+      const latest = [...templates].sort((a, b) => b.id - a.id)[0];
+      latestTemplateId = latest.id;
+    }
+    setFormData({ name: '', monthYear: '', startDate: '', endDate: '', status: 'Open', templateId: latestTemplateId, teamIds: [] });
+    setIsModalOpen(true);
+  };
+
   if (viewingPeriodId) {
     return <TeamReview periodId={viewingPeriodId} onBack={() => setViewingPeriodId(null)} isAdminView={true} />;
   }
@@ -104,7 +118,7 @@ const ReviewPeriodManager = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-slate-800">Danh sách Kỳ Đánh Giá</h3>
-        <button onClick={() => setIsModalOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
+        <button onClick={handleOpenModal} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
           <Plus className="w-4 h-4" /> Mở kỳ đánh giá
         </button>
       </div>
@@ -199,7 +213,6 @@ const ReviewPeriodManager = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Biểu mẫu đánh giá</label>
                   <select value={formData.templateId} onChange={e => setFormData({...formData, templateId: e.target.value})} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none">
-                    <option value="">-- Mặc định --</option>
                     {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>

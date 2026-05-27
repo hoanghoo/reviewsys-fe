@@ -10,7 +10,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const { login } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ const Login = () => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    
+
     try {
       const user = await login(username, password);
       // Redirect based on roles, prioritizing higher roles if multiple exist
@@ -52,11 +52,11 @@ const Login = () => {
       <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-100 rounded-full mix-blend-multiply filter blur-2xl opacity-70 animate-blob"></div>
       <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-200/60 rounded-full mix-blend-multiply filter blur-2xl opacity-60 animate-blob animation-delay-2000"></div>
       <div className="absolute -bottom-8 left-20 w-72 h-72 bg-purple-100 rounded-full mix-blend-multiply filter blur-2xl opacity-60 animate-blob animation-delay-4000"></div>
-      
+
       <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/80 border border-slate-100 transform transition-all relative z-10">
         <div className="text-center mb-8">
           <img src={logo} alt="Logo" className="w-24 h-24 object-contain mx-auto mb-4" />
-          <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">HỆ THỐNG CHẤM ĐIỂM</h2>
+          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight text-center">HỆ THỐNG CHẤM ĐIỂM, ĐÁNH GIÁ KẾT QUẢ THỰC HIỆN NHIỆM VỤ CÁ NHÂN</h2>
           <p className="text-slate-500 mt-2 text-[10px] uppercase tracking-wider font-bold">Phòng An ninh mạng & PCTP sử dụng công nghệ cao</p>
         </div>
 

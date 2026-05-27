@@ -34,7 +34,7 @@ const ReviewList = () => {
         case 'ManagerReviewed':
           return { label: 'Chờ lãnh đạo duyệt', color: 'bg-purple-100 text-purple-700', icon: Clock };
         case 'Completed':
-          return { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle };
+          return { label: 'Hoàn tất', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle };
         default:
           return { label: 'Chưa hoàn thành', color: 'bg-amber-100 text-amber-700', icon: AlertCircle };
       }

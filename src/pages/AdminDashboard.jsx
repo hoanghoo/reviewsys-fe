@@ -29,7 +29,7 @@ const AdminDashboard = () => {
           <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
           <div>
             <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPI Admin Panel</h1>
-            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Quản lý hệ thống</p>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Bảng điều khiển</p>
           </div>
         </div>
 
@@ -56,7 +56,7 @@ const AdminDashboard = () => {
         <div className="p-4 border-t border-slate-100">
           <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-100">
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{user?.roles?.includes("Admin") ? 'Người Quản trị' : user?.roles?.includes("Leader") ? "Lãnh đạo" : user?.roles?.includes("Manager") ? "Chỉ huy đội" : "Cán bộ"}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{user?.roles?.includes("Admin") ? 'Quản trị viên' : user?.roles?.includes("Leader") ? "Lãnh đạo" : user?.roles?.includes("Manager") ? "Chỉ huy đội" : "Cán bộ"}</p>
           </div>
           {user?.roles?.includes("Admin") && (
             <div className="mb-4">

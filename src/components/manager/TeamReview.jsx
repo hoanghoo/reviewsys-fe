@@ -1,10 +1,31 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
-import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info, UserCheck, Power } from 'lucide-react';
+import { Search, Filter, Eye, CheckCircle, Clock, AlertCircle, Save, X, FileSignature, LayoutGrid, Users as UsersIcon, Calendar, Download, Info, UserCheck, Power, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 import SelfReviewForm from '../employee/SelfReviewForm';
+
+const removeVietnameseTones = (str) => {
+  if (!str) return '';
+  str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  str = str.replace(/đ/g, "d");
+  str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+  str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+  str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+  str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+  str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+  str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+  str = str.replace(/Đ/g, "D");
+  str = str.replace(/[^a-zA-Z0-9 ]/g, "");
+  str = str.replace(/\s+/g, "_");
+  return str;
+};
 
 const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => {
   const { user: currentUser } = useAuth();
@@ -118,15 +139,15 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
     setEditFeedback(fb);
   };
 
-  const handleApprove = async (targetStatus, formCommanderName, formCommanderRank, formCommanderPosition) => {
+  const handleApprove = async (targetStatus, formCommanderName, formCommanderRank, formCommanderPosition, formCommanderScore) => {
     if (!selectedReview) return;
     
-    // Extract DOM data
-    const tableData = { scores: [], notes: [] };
-    const formEl = document.getElementById('manager-review-form');
+    let tableData = { scores: [], notes: [] };
+    const formEl = document.querySelector('.docx-preview');
     if (formEl) {
        const scoreInputs = formEl.querySelectorAll('.score-input');
        const noteInputs = formEl.querySelectorAll('.note-input');
+       
        scoreInputs.forEach(i => tableData.scores.push(i.value));
        noteInputs.forEach(i => tableData.notes.push(i.value));
     }
@@ -139,10 +160,14 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
        commanderPosition: formCommanderPosition || editFeedback.commanderPosition
     };
 
+    const finalScore = targetStatus === 'ManagerReviewed' || targetStatus === 'Completed' 
+                       ? (formCommanderScore !== undefined ? formCommanderScore : editScore) 
+                       : editScore;
+
     try {
       await api.put(`/reviews/${selectedReview.id}/approve`, {
         status: targetStatus,
-        score: editScore,
+        score: finalScore,
         feedback: finalFeedback
       });
       toast.success(targetStatus === 'Submitted' ? 'Đã trả lại đánh giá cho chỉ huy!' : 'Đã duyệt đánh giá thành công!');
@@ -151,24 +176,21 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
     } catch (err) {
       toast.error('Lỗi thao tác đánh giá: ' + (err.response?.data?.message || err.message));
     }
-  const handleDownloadAttachment = (reviewId, fileName) => {
-    // Determine the real file extension
+  };
+
+  const getFormattedFileName = (fileName, member) => {
     const ext = fileName ? fileName.substring(fileName.lastIndexOf('.')) : '.docx';
-    
+    const periodName = activePeriod?.name ? removeVietnameseTones(activePeriod.name) : 'Ky_Danh_Gia';
+    let rawTeamName = member?.Team?.shortName || member?.Team?.fullName || member?.Team?.name || '';
+    const teamName = removeVietnameseTones(rawTeamName) || 'Doi';
+    const fullName = removeVietnameseTones(member?.fullName || 'NhanVien');
+    return `${periodName}_${teamName}_${fullName}_Document${ext}`;
+  };
+
+  const handleDownloadAttachment = (reviewId, fileName, member) => {
     api.get(`/reviews/${reviewId}/attachment`, { responseType: 'blob' })
       .then(res => {
-        // We let backend handle the filename via Content-Disposition if possible, 
-        // but since we might not have access to headers easily in axios without full response,
-        // we'll extract filename from headers or use a fallback.
-        const contentDisposition = res.headers['content-disposition'];
-        let finalFileName = `DinhKem_${reviewId}${ext}`;
-        
-        if (contentDisposition) {
-          const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-          if (fileNameMatch && fileNameMatch.length === 2) {
-            finalFileName = fileNameMatch[1];
-          }
-        }
+        const finalFileName = getFormattedFileName(fileName, member);
         
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a');
@@ -344,7 +366,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
         <SelfReviewForm 
           period={reviewPeriodProps}
           employeeProfile={selectedReview.user}
-          readOnly={true}
+          readOnly={selectedReview.status === 'Reviewed' || selectedReview.status === 'Completed' || isAdminView || (currentUser?.roles?.includes("Admin") && !currentUser?.roles?.includes("Manager") && !currentUser?.roles?.includes("Leader"))}
           isManagerMode={true}
           isLeader={isLeader}
           isAdminMode={isAdminView || (currentUser?.roles?.includes("Admin") && !currentUser?.roles?.includes("Manager") && !currentUser?.roles?.includes("Leader"))}
@@ -431,7 +453,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         <div 
           onClick={() => { setSelectedStatus(''); setPagination(prev => ({...prev, page: 1})); }}
           className={`cursor-pointer p-4 rounded-2xl shadow-sm border transition-all flex items-center gap-4 ${
@@ -498,13 +520,13 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nhân viên</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Đội</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Tự chấm</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Chỉ huy chấm</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Xếp loại</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Thao tác</th>
+                <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Nhân viên</th>
+                <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Đội</th>
+                <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Trạng thái</th>
+                <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Tự chấm</th>
+                <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Chỉ huy chấm</th>
+                <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Xếp loại</th>
+                <th className="px-4 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -512,7 +534,7 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
                 const review = member.ReviewsReceived && member.ReviewsReceived[0];
                 return (
                   <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
                           {member.fullName.charAt(0)}
@@ -523,23 +545,23 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4 whitespace-nowrap">
                       <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded">
                         {member.Team?.shortName || member.Team?.fullName || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4 whitespace-nowrap">
                       {getStatusLabel(review?.status)}
                     </td>
-                    <td className="px-6 py-4 text-center font-bold text-slate-600">
+                    <td className="px-4 py-4 text-center font-bold text-slate-600 whitespace-nowrap">
                       {review?.selfScore || review?.score || '-'}
                     </td>
-                    <td className="px-6 py-4 text-center font-bold text-indigo-600 bg-indigo-50/30">
+                    <td className="px-4 py-4 text-center font-bold text-indigo-600 bg-indigo-50/30 whitespace-nowrap">
                       {review?.status !== 'Submitted' && review?.status !== 'Draft' && review?.status !== undefined
                         ? review?.score
                         : '-'}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-4 py-4 text-center whitespace-nowrap">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${(review?.score >= 90) ? 'text-emerald-700 bg-emerald-50' :
                           (review?.score >= 70) ? 'text-blue-700 bg-blue-50' :
                             (review?.score >= 50) ? 'text-amber-700 bg-amber-50' :
@@ -552,16 +574,16 @@ const TeamReview = ({ periodId: propPeriodId, onBack, isAdminView = false }) => 
                         ) : '-'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 py-4 text-right whitespace-nowrap">
                       {review ? (
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           {review.attachmentFile && (
                             <button
-                              onClick={() => handleDownloadAttachment(review.id, review.attachmentFile)}
+                              onClick={() => handleDownloadAttachment(review.id, review.attachmentFile, member)}
                               className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                               title="Tải đính kèm"
                             >
-                              <FileText className="w-4 h-4" /> Đính kèm
+                              <FileText className="w-4 h-4" /> <span className="max-w-[120px] truncate">{getFormattedFileName(review.attachmentFile, member)}</span>
                             </button>
                           )}
                           {(review.status === 'Reviewed' || review.status === 'Completed') && (

@@ -25,8 +25,8 @@ const ManagerDashboard = () => {
         <div className="p-5 border-b border-slate-100 flex items-center gap-3">
           <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
           <div>
-            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPY</h1>
-            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Quản lý đánh giá</p>
+            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPI</h1>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Bảng điều khiển</p>
           </div>
         </div>
 
@@ -38,11 +38,10 @@ const ManagerDashboard = () => {
               <Link
                 key={tab.id}
                 to={`/manager/${tab.id}`}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
-                  isActive 
-                  ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${isActive
+                    ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
                 {tab.label}
@@ -58,8 +57,8 @@ const ManagerDashboard = () => {
           </div>
           {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && (
             <div className="mb-4">
-              <select 
-                onChange={(e) => { if(e.target.value) window.location.href = e.target.value; }}
+              <select
+                onChange={(e) => { if (e.target.value) window.location.href = e.target.value; }}
                 value={user?.roles?.includes("Leader") ? "/manager/evaluations" : "/manager/team-tracking"}
                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-blue-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
               >
@@ -70,7 +69,7 @@ const ManagerDashboard = () => {
               </select>
             </div>
           )}
-          <button 
+          <button
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
           >
@@ -83,12 +82,12 @@ const ManagerDashboard = () => {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-slate-50">
         <div className="p-6 max-w-7xl mx-auto">
-           <Routes>
-              <Route path="team-tracking" element={<TeamTracking />} />
-              <Route path="evaluations" element={<TeamReview />} />
-              <Route path="profile" element={<Profile />} />
-              <Route path="*" element={<Navigate to="evaluations" replace />} />
-           </Routes>
+          <Routes>
+            <Route path="team-tracking" element={<TeamTracking />} />
+            <Route path="evaluations" element={<TeamReview />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="*" element={<Navigate to="evaluations" replace />} />
+          </Routes>
         </div>
       </main>
     </div>

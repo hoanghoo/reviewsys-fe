@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from '../../context/ToastContext';
 import api from '../../lib/axios';
-import { Save, Shield, Download, FileSignature, ArrowLeft, Loader2, CheckCircle2, History, AlertTriangle, FileText, UploadCloud, Info, Copy, Search, XCircle } from 'lucide-react';
+import { Save, Shield, Download, FileSignature, ArrowLeft, Loader2, CheckCircle2, History, AlertTriangle, FileText, UploadCloud, Info, Copy, Search, XCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../common/ConfirmModal';
 
@@ -31,6 +31,27 @@ const DOCX_PREVIEW_STYLES = `
 
 const inputClass = "h-7 border-b border-slate-300 bg-transparent outline-none px-1.5 text-slate-800 font-semibold focus:border-blue-500 transition-colors placeholder:font-normal placeholder:text-slate-400";
 
+const removeVietnameseTones = (str) => {
+  if (!str) return '';
+  str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  str = str.replace(/đ/g, "d");
+  str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+  str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+  str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+  str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+  str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+  str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+  str = str.replace(/Đ/g, "D");
+  str = str.replace(/[^a-zA-Z0-9 ]/g, "");
+  str = str.replace(/\s+/g, "_");
+  return str;
+};
+
 export default function SelfReviewForm({ period, onBack, employeeProfile = null, readOnly = false, isManagerMode = false, isLeader = false, onTotalScoreChange, onApprove, isAdminMode = false }) {
   const { user: currentUserProfile } = useAuth();
   const toast = useToast();
@@ -51,8 +72,8 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
   const [reviewStatus, setReviewStatus] = useState('');
   const [fileInput, setFileInput] = useState(null);
 
-  const isAdmin = (currentUserProfile?.roles && currentUserProfile.roles.includes("Admin")) || (profile?.roles && profile.roles.includes("Admin"));
-  const actualIsLeader = isLeader || (profile?.roles && profile.roles.includes("Leader")) || ['Trưởng phòng', 'Phó trưởng phòng', 'Phó phòng'].includes(profile?.position);
+  const isAdmin = currentUserProfile?.roles && currentUserProfile.roles.includes("Admin");
+  const actualIsLeader = isLeader || (currentUserProfile?.roles && currentUserProfile.roles.includes("Leader")) || ['Trưởng phòng', 'Phó trưởng phòng', 'Phó phòng'].includes(currentUserProfile?.position);
   const isReadOnly = isAdminMode || ((readOnly || isSubmitted) && (!isManagerMode || (actualIsLeader && !isAdmin)));
 
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => { } });
@@ -297,6 +318,22 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
     if (onTotalScoreChange) {
       onTotalScoreChange(isManagerMode ? commanderTotal : employeeTotal);
     }
+      // ------------------------------------------------------------
+    // New: Sync commander‑score fields for leaders so details show
+    // ------------------------------------------------------------
+    if (actualIsLeader && !isAdminMode) {
+      // Copy every employee score into the corresponding commander field
+      const commanderInputs = formRef.current.querySelectorAll('.commander-score');
+      commanderInputs.forEach(ci => {
+        const id = ci.getAttribute('data-id');
+        // The employee field uses the same base id without the "_commander" suffix
+        const baseId = id.replace('_commander', '');
+        const src = formRef.current.querySelector(`.score-input[data-id="${baseId}"]`);
+        if (src) {
+          ci.value = src.value;
+        }
+      });
+    }
   };
 
   const handleTableInput = (e) => {
@@ -469,8 +506,8 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
             profile?.Team?.shortName ||
             profile?.Team?.name ||
             profile?.teamName || '',
-          month: period?.name?.match(/Tháng\s+(\d+)/)?.[1] || new Date().getMonth() + 1,
-          year: period?.name?.match(/(\d{4})/)?.[1] || new Date().getFullYear(),
+          month: reviewMonth,
+          year: reviewYear,
           classification: classifyScore(totalScore),
           commander: commanderName || period?.Reviews?.[0]?.feedback?.commander || ''
         }
@@ -481,10 +518,14 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
 
       const response = await api.post('/reviews/export-draft-docx', payload, { responseType: 'blob' });
 
+      const periodName = period?.name ? removeVietnameseTones(period.name) : 'Ky_Danh_Gia';
+      const fullName = removeVietnameseTones(employeeProfile?.fullName || profile?.fullName || 'NhanVien');
+      const fileName = `BangDanhGia_${periodName}_${fullName}.docx`;
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Ban_Danh_Gia_${profile?.fullName || 'NhanVien'}.docx`);
+      link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -494,6 +535,36 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
     } catch (err) {
       toast.error('Lỗi xuất file docx: ' + (err.response?.data?.message || err.message));
     }
+  };
+
+  const getFormattedFileName = (originalName) => {
+    const ext = originalName ? originalName.substring(originalName.lastIndexOf('.')) : '.docx';
+    const periodName = period?.name ? removeVietnameseTones(period.name) : 'Ky_Danh_Gia';
+    let rawTeamName = profile?.Team?.shortName || profile?.Team?.fullName || profile?.Team?.name || '';
+    const teamName = removeVietnameseTones(rawTeamName) || 'Doi';
+    const fullName = removeVietnameseTones(profile?.fullName || 'NhanVien');
+    
+    return `${periodName}_${teamName}_${fullName}_Document${ext}`;
+  };
+
+  const handleDownloadAttachment = (reviewId, fileName) => {
+    const ext = fileName ? fileName.substring(fileName.lastIndexOf('.')) : '.docx';
+    api.get(`/reviews/${reviewId}/attachment`, { responseType: 'blob' })
+      .then(res => {
+        let finalFileName = getFormattedFileName(fileName);
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', finalFileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success('Đã tải file đính kèm!');
+      })
+      .catch(err => {
+        console.error('Download error:', err);
+        toast.error('Lỗi tải file đính kèm: ' + (err.response?.data?.message || err.message));
+      });
   };
 
   const showSubmitConfirm = () => {
@@ -524,6 +595,11 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
 
     if (hasInputs && !allFilled) {
       toast.error('Vui lòng tự chấm điểm đầy đủ tất cả các tiêu chí trước khi nộp!');
+      return;
+    }
+
+    if (!fileInput && !period?.Reviews?.[0]?.attachmentFile) {
+      toast.error('Vui lòng đính kèm file trước khi nộp đánh giá!');
       return;
     }
 
@@ -654,27 +730,6 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                       placeholder="Nhập họ tên chỉ huy..."
                       className="w-full text-center font-bold text-lg text-blue-800 border-b border-transparent hover:border-slate-200 focus:border-blue-500 outline-none bg-transparent transition-colors placeholder:font-normal placeholder:text-slate-400 placeholder:text-sm"
                     />
-                    {(commanderRank || commanderPosition || (isManagerMode && !isReadOnly)) && (
-                      <div className="flex justify-center items-center text-xs font-medium text-slate-500 gap-1">
-                        <input
-                          type="text"
-                          readOnly={isReadOnly || !isManagerMode}
-                          value={commanderRank}
-                          onChange={e => setCommanderRank(e.target.value)}
-                          placeholder="Cấp bậc"
-                          className="w-20 text-right border-b border-transparent hover:border-slate-200 focus:border-blue-500 outline-none bg-transparent placeholder:font-normal"
-                        />
-                        <span>-</span>
-                        <input
-                          type="text"
-                          readOnly={isReadOnly || !isManagerMode}
-                          value={commanderPosition}
-                          onChange={e => setCommanderPosition(e.target.value)}
-                          placeholder="Chức vụ"
-                          className="w-24 text-left border-b border-transparent hover:border-slate-200 focus:border-blue-500 outline-none bg-transparent placeholder:font-normal"
-                        />
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="mt-12 text-slate-400 italic font-normal text-sm">Chưa có chữ ký</div>
@@ -684,15 +739,15 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
           </div>
 
           {/* File Upload Section */}
-          {!isReadOnly && (
+          {(!isReadOnly && !isManagerMode) ? (
             <div className="mt-8 bg-blue-50/50 border border-blue-200/60 rounded-xl p-5 shadow-sm">
               <div className="flex items-start gap-3">
                 <UploadCloud className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
                 <div className="w-full">
-                  <p className="font-bold text-blue-800 text-sm mb-2">Đính kèm minh chứng (Tùy chọn):</p>
+                  <p className="font-bold text-blue-800 text-sm mb-2">File đính kèm <span className="text-red-500">*</span>:</p>
                   <label className="block w-full cursor-pointer">
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       accept=".doc,.docx"
                       onChange={(e) => {
                         const file = e.target.files[0];
@@ -720,14 +775,35 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                     </div>
                   )}
                   {period?.Reviews?.[0]?.attachmentFile && !fileInput && (
-                    <div className="mt-2 text-xs text-emerald-700 font-medium flex items-center gap-1.5">
+                    <div 
+                      className="mt-2 text-xs text-emerald-700 font-medium flex items-center gap-1.5 cursor-pointer hover:underline"
+                      onClick={() => handleDownloadAttachment(period.Reviews[0].id, period.Reviews[0].attachmentFile)}
+                    >
                       <FileText className="w-3.5 h-3.5" />
-                      Đã có file tải lên: {period.Reviews[0].attachmentFile}
+                      Đã có file tải lên: <span className="font-bold">{getFormattedFileName(period.Reviews[0].attachmentFile)}</span>
                     </div>
                   )}
                 </div>
               </div>
             </div>
+          ) : (
+            period?.Reviews?.[0]?.attachmentFile && (
+              <div className="mt-8 bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <FileText className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                  <div className="w-full">
+                    <p className="font-bold text-emerald-800 text-sm mb-2">File đính kèm:</p>
+                    <div 
+                      className="mt-1 text-sm text-emerald-700 font-bold cursor-pointer hover:underline inline-flex items-center gap-1"
+                      onClick={() => handleDownloadAttachment(period.Reviews[0].id, period.Reviews[0].attachmentFile)}
+                    >
+                      <Download className="w-4 h-4" />
+                      {getFormattedFileName(period.Reviews[0].attachmentFile)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
           )}
 
           {/* Scoring Rules Guide */}
@@ -776,11 +852,33 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                             <span className="text-xs text-slate-400">{new Date(log.date).toLocaleString('vi-VN')}</span>
                           </div>
                           <div className="text-sm">
-                            Thao tác: <span className="font-semibold text-blue-600">
-                              {log.action === 'Submitted' ? 'Chỉ huy từ chối / Chờ duyệt' :
-                                log.action === 'ManagerReviewed' ? 'Chỉ huy đã duyệt' :
-                                  log.action === 'Completed' ? 'Lãnh đạo đã duyệt (Hoàn thành)' : log.action}
-                            </span>
+                            {(() => {
+                              let text = log.action;
+                              let color = 'text-blue-600';
+                              
+                              if (log.action === 'Submitted') {
+                                if (log.role === 'Cán bộ') {
+                                  text = 'Cán bộ nộp đánh giá';
+                                  color = 'text-blue-600';
+                                } else {
+                                  text = 'Lãnh đạo phòng từ chối';
+                                  color = 'text-red-600';
+                                }
+                              } else if (log.action === 'ManagerReviewed') {
+                                text = 'Chỉ huy đội phê duyệt';
+                                color = 'text-blue-600';
+                              } else if (log.action === 'Completed') {
+                                text = 'Lãnh đạo phòng phê duyệt';
+                                color = 'text-emerald-600';
+                              } else if (log.action === 'Draft') {
+                                text = `${log.role === 'Lãnh đạo' ? 'Lãnh đạo phòng' : 'Chỉ huy đội'} từ chối`;
+                                color = 'text-red-600';
+                              }
+
+                              return (
+                                <>Thao tác: <span className={`font-semibold ${color}`}>{text}</span></>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -853,7 +951,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                   title: 'Phê Duyệt Đánh Giá',
                   message: `Bạn có chắc chắn muốn phê duyệt bản đánh giá này với tổng điểm chỉ huy là ${commanderTotalScore} điểm? Điểm số sẽ được ghi nhận.`,
                   type: 'warning',
-                  onConfirm: () => onApprove('ManagerReviewed', commanderName, commanderRank, commanderPosition)
+                  onConfirm: () => onApprove('ManagerReviewed', commanderName, commanderRank, commanderPosition, commanderTotalScore)
                 });
               }}
               className="px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200"
@@ -863,7 +961,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
           </>
         )}
 
-        {isManagerMode && !isAdminMode && actualIsLeader && (reviewStatus === 'ManagerReviewed' || reviewStatus === 'Submitted') && (
+        {isManagerMode && !isAdminMode && actualIsLeader && reviewStatus === 'ManagerReviewed' && (
           <>
             <button
               onClick={() => {
@@ -872,7 +970,7 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                   title: 'Từ Chối Đánh Giá',
                   message: 'Bạn có chắc chắn muốn từ chối bản đánh giá này? Bản đánh giá sẽ được trả lại.',
                   type: 'warning',
-                  onConfirm: () => onApprove(reviewStatus === 'ManagerReviewed' ? 'Submitted' : 'Draft', commanderName)
+                  onConfirm: () => onApprove(reviewStatus === 'ManagerReviewed' ? 'Submitted' : 'Draft', commanderName, commanderRank, commanderPosition, commanderTotalScore)
                 });
               }}
               className="px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 flex items-center gap-2"
@@ -884,9 +982,9 @@ export default function SelfReviewForm({ period, onBack, employeeProfile = null,
                 setConfirmConfig({
                   isOpen: true,
                   title: 'Phê Duyệt Đánh Giá',
-                  message: 'Bạn có chắc chắn muốn phê duyệt bản đánh giá này? Kết quả sẽ được ghi nhận là Hoàn thành.',
+                  message: 'Bạn có chắc chắn muốn phê duyệt bản đánh giá này? Kết quả sẽ được ghi nhận là Hoàn tất.',
                   type: 'warning',
-                  onConfirm: () => onApprove('Completed', commanderName)
+                  onConfirm: () => onApprove('Completed', commanderName, commanderRank, commanderPosition, commanderTotalScore)
                 });
               }}
               className="px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"

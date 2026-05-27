@@ -22,8 +22,8 @@ const EmployeeDashboard = () => {
         <div className="p-5 border-b border-slate-100 flex items-center gap-3">
           <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
           <div>
-            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPY</h1>
-            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Dashboard Cán bộ</p>
+            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPI</h1>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Bảng điều khiển</p>
           </div>
         </div>
 
@@ -35,11 +35,10 @@ const EmployeeDashboard = () => {
               <Link
                 key={tab.id}
                 to={`/employee/${tab.id}`}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
-                  isActive 
-                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${isActive
+                    ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
                 {tab.label}
@@ -55,8 +54,8 @@ const EmployeeDashboard = () => {
           </div>
           {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && (
             <div className="mb-4">
-              <select 
-                onChange={(e) => { if(e.target.value) window.location.href = e.target.value; }}
+              <select
+                onChange={(e) => { if (e.target.value) window.location.href = e.target.value; }}
                 value="/employee/overview"
                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-emerald-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
               >
@@ -67,7 +66,7 @@ const EmployeeDashboard = () => {
               </select>
             </div>
           )}
-          <button 
+          <button
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
           >

@@ -305,7 +305,7 @@ const UserManager = () => {
             <label className="block text-xs font-medium text-slate-500 mb-1">Vai trò hệ thống</label>
             <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="w-full border-slate-300 rounded-lg p-2 text-sm focus:ring-purple-500 focus:border-purple-500 outline-none">
               <option value="">Tất cả vai trò</option>
-              <option value="Admin">Người Quản trị</option>
+              <option value="Admin">Quản trị viên</option>
               <option value="Leader">Lãnh đạo</option>
               <option value="Manager">Chỉ huy đội</option>
               <option value="Employee">Cán bộ</option>

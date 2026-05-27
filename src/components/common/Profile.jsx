@@ -78,7 +78,7 @@ const Profile = () => {
             <div className="mt-6 w-full pt-6 border-t border-slate-100 space-y-3">
               <div className="flex items-center gap-3 text-sm text-slate-600 justify-center">
                 <Shield className="w-4 h-4 text-blue-500" />
-                <span className="font-semibold">{(profile?.roles && profile.roles.includes("Admin")) ? "Người Quản trị" : (profile?.roles && profile.roles.includes("Leader")) ? "Lãnh đạo" : (profile?.roles && profile.roles.includes("Manager")) ? "Chỉ huy đội" : "Cán bộ"}</span>
+                <span className="font-semibold">{(profile?.roles && profile.roles.includes("Admin")) ? "Quản trị viên" : (profile?.roles && profile.roles.includes("Leader")) ? "Lãnh đạo" : (profile?.roles && profile.roles.includes("Manager")) ? "Chỉ huy đội" : "Cán bộ"}</span>
               </div>
             </div>
           </div>
@@ -137,7 +137,7 @@ const Profile = () => {
                 </div>
               </div>
               <div className="p-6 bg-blue-50/30 border-t border-slate-100 italic text-[11px] text-slate-400 text-center">
-                * Các thông tin trên do Người Quản trị hệ thống cập nhật. Vui lòng liên hệ nếu có sai sót.
+                * Các thông tin trên do Quản trị viên hệ thống cập nhật. Vui lòng liên hệ nếu có sai sót.
               </div>
             </div>
           ) : (
