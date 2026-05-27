@@ -7,6 +7,7 @@ import ReviewPeriodManager from '../components/admin/ReviewPeriodManager';
 import TemplateManager from '../components/admin/TemplateManager';
 import Profile from '../components/common/Profile';
 import { Shield, Users, Calendar, FileText, LogOut, User as UserIcon } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -24,13 +25,11 @@ const AdminDashboard = () => {
     <div className="h-screen bg-slate-50 flex overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm flex-shrink-0">
-        <div className="p-6 border-b border-slate-100 flex items-center gap-3">
-          <div className="bg-purple-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-purple-200">
-            <span className="text-white font-bold text-lg">i</span>
-          </div>
+        <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+          <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
           <div>
-            <h1 className="font-bold text-slate-800 tracking-tight">iPRS Admin</h1>
-            <p className="text-xs text-slate-500 font-medium">System Management</p>
+            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPI Admin Panel</h1>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Bảng điều khiển</p>
           </div>
         </div>
 
@@ -42,11 +41,10 @@ const AdminDashboard = () => {
               <Link
                 key={tab.id}
                 to={`/admin/${tab.id}`}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
-                  isActive 
-                  ? 'bg-purple-50 text-purple-700 shadow-sm border border-purple-100' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${isActive
+                    ? 'bg-purple-50 text-purple-700 shadow-sm border border-purple-100'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-purple-600' : 'text-slate-400'}`} />
                 {tab.label}
@@ -58,9 +56,23 @@ const AdminDashboard = () => {
         <div className="p-4 border-t border-slate-100">
           <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-100">
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{user?.role === 'Admin' ? 'Người vận hành' : user?.role === 'Manager' ? 'Quản lý' : 'Người dùng'}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{user?.roles?.includes("Admin") ? 'Quản trị viên' : user?.roles?.includes("Leader") ? "Lãnh đạo" : user?.roles?.includes("Manager") ? "Chỉ huy đội" : "Cán bộ"}</p>
           </div>
-          <button 
+          {user?.roles?.includes("Admin") && (
+            <div className="mb-4">
+              <select 
+                onChange={(e) => { if(e.target.value) window.location.href = e.target.value; }}
+                value="/admin/teams"
+                className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-purple-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
+              >
+                {user?.roles?.includes("Employee") && <option value="/employee/overview">👤 Vai trò: Cán bộ</option>}
+                {user?.roles?.includes("Manager") && !user?.roles?.includes("Leader") && <option value="/manager/team-tracking">👥 Vai trò: Chỉ huy đội</option>}
+                {user?.roles?.includes("Leader") && <option value="/manager/evaluations">👥 Vai trò: Lãnh đạo phòng</option>}
+                <option value="/admin/teams">🛡️ Vai trò: Quản trị</option>
+              </select>
+            </div>
+          )}
+          <button
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
           >

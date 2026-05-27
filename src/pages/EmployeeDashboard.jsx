@@ -3,7 +3,8 @@ import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReviewList from '../components/employee/ReviewList';
 import Profile from '../components/common/Profile';
-import { LayoutDashboard, LogOut, User as UserIcon } from 'lucide-react';
+import { LayoutDashboard, LogOut, User as UserIcon, Shield, Users } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
@@ -18,13 +19,11 @@ const EmployeeDashboard = () => {
     <div className="h-screen bg-slate-50 flex overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm flex-shrink-0">
-        <div className="p-6 border-b border-slate-100 flex items-center gap-3">
-          <div className="bg-emerald-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
-            <span className="text-white font-bold text-lg">i</span>
-          </div>
+        <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+          <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
           <div>
-            <h1 className="font-bold text-slate-800 tracking-tight">iPRS</h1>
-            <p className="text-xs text-slate-500 font-medium">Dashboard Người dùng</p>
+            <h1 className="font-bold text-slate-800 tracking-tight leading-none mb-0.5">KPI</h1>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Bảng điều khiển</p>
           </div>
         </div>
 
@@ -36,11 +35,10 @@ const EmployeeDashboard = () => {
               <Link
                 key={tab.id}
                 to={`/employee/${tab.id}`}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
-                  isActive 
-                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${isActive
+                    ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
                 {tab.label}
@@ -54,7 +52,21 @@ const EmployeeDashboard = () => {
             <p className="text-sm font-semibold text-slate-800">{user?.fullName}</p>
             <p className="text-xs text-slate-500 mt-0.5">{user?.rank} {user?.position ? `- ${user?.position}` : ''}</p>
           </div>
-          <button 
+          {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager") || user?.roles?.includes("Leader")) && (
+            <div className="mb-4">
+              <select
+                onChange={(e) => { if (e.target.value) window.location.href = e.target.value; }}
+                value="/employee/overview"
+                className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-emerald-500 transition-all shadow-sm cursor-pointer text-center appearance-none"
+              >
+                {user?.roles?.includes("Employee") && <option value="/employee/overview">👤 Vai trò: Cán bộ</option>}
+                {user?.roles?.includes("Manager") && !user?.roles?.includes("Leader") && <option value="/manager/team-tracking">👥 Vai trò: Chỉ huy đội</option>}
+                {user?.roles?.includes("Leader") && <option value="/manager/evaluations">👥 Vai trò: Lãnh đạo phòng</option>}
+                {user?.roles?.includes("Admin") && <option value="/admin/teams">🛡️ Vai trò: Quản trị</option>}
+              </select>
+            </div>
+          )}
+          <button
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
           >

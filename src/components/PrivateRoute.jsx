@@ -17,10 +17,15 @@ const PrivateRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  const effectiveRoles = [...(allowedRoles || [])];
+  if (effectiveRoles.includes('Manager') || effectiveRoles.includes('Employee')) {
+    effectiveRoles.push('Leader');
+  }
+
+  if (allowedRoles && !(user.roles && user.roles.some(r => effectiveRoles.includes(r)))) {
     // If not allowed, redirect to their default dashboard
-    if (user.role === 'Admin') return <Navigate to="/admin" />;
-    if (user.role === 'Manager') return <Navigate to="/manager" />;
+    if (user.roles && user.roles.includes("Admin")) return <Navigate to="/admin" />;
+    if (user.roles && (user.roles.includes("Leader") || user.roles.includes("Manager"))) return <Navigate to="/manager" />;
     return <Navigate to="/employee" />;
   }
 

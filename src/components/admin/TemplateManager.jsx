@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../lib/axios';
 import { useToast } from '../../context/ToastContext';
 import ConfirmModal from '../common/ConfirmModal';
@@ -9,11 +9,21 @@ const DOCX_PREVIEW_STYLES = `
   .docx-preview th, .docx-preview td { border: 1px solid #cbd5e1; padding: 5px 8px; vertical-align: top; }
   .docx-preview th { background: #f1f5f9; font-weight: 600; }
   .docx-preview thead th { background: #e2e8f0; text-align: center; }
-  .docx-preview thead th:nth-child(1) { width: 5%; }
-  .docx-preview thead th:nth-child(2) { width: 40%; }
-  .docx-preview thead th:nth-child(3) { width: 15%; }
-  .docx-preview thead th:nth-child(4) { width: 15%; }
-  .docx-preview thead th:nth-child(5) { width: 25%; }
+  
+  /* 6-column layout (single-new.docx) */
+  .docx-preview table:has(th:nth-child(6)) thead th:nth-child(1) { width: 5%; }
+  .docx-preview table:has(th:nth-child(6)) thead th:nth-child(2) { width: 35%; }
+  .docx-preview table:has(th:nth-child(6)) thead th:nth-child(3) { width: 15%; }
+  .docx-preview table:has(th:nth-child(6)) thead th:nth-child(4) { width: 15%; }
+  .docx-preview table:has(th:nth-child(6)) thead th:nth-child(5) { width: 15%; }
+  .docx-preview table:has(th:nth-child(6)) thead th:nth-child(6) { width: 15%; }
+
+  /* 5-column layout (single.docx) */
+  .docx-preview table:not(:has(th:nth-child(6))) thead th:nth-child(1) { width: 5%; }
+  .docx-preview table:not(:has(th:nth-child(6))) thead th:nth-child(2) { width: 40%; }
+  .docx-preview table:not(:has(th:nth-child(6))) thead th:nth-child(3) { width: 15%; }
+  .docx-preview table:not(:has(th:nth-child(6))) thead th:nth-child(4) { width: 15%; }
+  .docx-preview table:not(:has(th:nth-child(6))) thead th:nth-child(5) { width: 25%; }
   .docx-preview td:has(input) { padding: 0; vertical-align: middle; height: 1px; }
   .docx-preview input.score-input,
   .docx-preview input.note-input { width: 100%; height: 100%; min-height: 34px; display: block; border: none; border-radius: 0; padding: 0 8px; font-size: 12px; background: #fff; outline: none; box-sizing: border-box; transition: background 0.15s, box-shadow 0.15s; }
@@ -47,7 +57,7 @@ const TemplateHeader = () => (
         <p className="font-semibold underline underline-offset-4">Độc lập – Tự do – Hạnh phúc</p>
       </div>
     </div>
-    
+
     <div className="text-center mb-6">
       <p className="font-bold text-blue-900 text-xl mb-1">BẢNG CHẤM ĐIỂM</p>
       <p className="text-sm text-slate-600 font-medium">Đánh giá kết quả thực hiện nhiệm vụ của Cán bộ chiến sĩ</p>
@@ -85,13 +95,13 @@ const TemplateFooter = () => (
         <input type="text" readOnly className={`${inputClass} w-48 font-bold text-lg text-emerald-600 border-b-2`} placeholder="..." />
       </div>
     </div>
-    
+
     <div className="flex justify-end text-sm text-slate-800 px-4 mt-6">
       <div className="text-center w-64">
         <p className="font-bold mb-1">CHỈ HUY ĐỘI</p>
         <p className="text-slate-500 italic mb-12">(Ký, ghi rõ họ tên)</p>
-        <input 
-          type="text" 
+        <input
+          type="text"
           readOnly
           placeholder="Nhập họ tên chỉ huy..."
           className="w-full text-center font-semibold text-slate-800 border-b border-slate-300 outline-none pb-1 bg-transparent placeholder:font-normal placeholder:text-slate-400"
@@ -107,7 +117,7 @@ const ScoringRules = () => (
     <div className="flex items-start gap-3">
       <Info className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
       <div className="text-sm text-amber-900 space-y-2">
-        <p className="font-bold text-amber-800">Quy tắc chấm điểm (Tham khảo):</p>
+        <p className="font-bold text-amber-800">Quy tắc chấm điểm:</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 mt-2 text-xs">
           <p>• Từ 90 điểm trở lên: <strong className="text-emerald-700">Xuất sắc</strong></p>
           <p>• Từ 75 – 89 điểm: <strong className="text-blue-700">Hoàn thành tốt</strong></p>
@@ -121,14 +131,24 @@ const ScoringRules = () => (
 );
 
 // Reusable preview renderer
-const DocxFormPreview = ({ html, showHeader = true, showRules = true }) => (
-  <div className="bg-white p-6 md:p-8">
-    {showHeader && <TemplateHeader />}
-    <div className="docx-preview overflow-x-auto pb-4" dangerouslySetInnerHTML={{ __html: html }} />
-    {showHeader && <TemplateFooter />}
-    {showRules && <ScoringRules />}
-  </div>
-);
+const DocxFormPreview = ({ html, showHeader = true, showRules = true }) => {
+  const containerRef = useRef(null);
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.querySelectorAll('input').forEach(inp => {
+        inp.setAttribute('disabled', 'true');
+      });
+    }
+  }, [html]);
+  return (
+    <div className="bg-white p-6 md:p-8">
+      {showHeader && <TemplateHeader />}
+      <div ref={containerRef} className="docx-preview overflow-x-auto pb-4" dangerouslySetInnerHTML={{ __html: html }} />
+      {showHeader && <TemplateFooter />}
+      {showRules && <ScoringRules />}
+    </div>
+  );
+};
 
 const TemplateManager = () => {
   const toast = useToast();
@@ -272,7 +292,7 @@ const TemplateManager = () => {
             </div>
             <div>
               <h3 className="font-bold text-slate-800 truncate" title={t.name}>{t.name}</h3>
-              <p className="text-xs text-slate-500 mt-0.5 truncate">{t.filePath.split('/').pop()}</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">{t.filePath ? t.filePath.split('/').pop() : ''}</p>
             </div>
           </div>
         ))}
@@ -300,7 +320,7 @@ const TemplateManager = () => {
               {step === 1 && (
                 <div className="space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Tên Template</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Tên biểu mẫu <span className="text-red-500">*</span></label>
                     <input required value={name} onChange={e => setName(e.target.value)} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none text-sm" placeholder="Ví dụ: Mẫu đánh giá tháng 5..." />
                   </div>
                   <div>

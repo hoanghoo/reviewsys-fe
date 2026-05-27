@@ -11,7 +11,7 @@ const ReviewPeriodManager = () => {
   const [templates, setTemplates] = useState([]);
   const [teams, setTeams] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: '', startDate: '', endDate: '', status: 'Open', templateId: '', teamIds: [] });
+  const [formData, setFormData] = useState({ name: '', monthYear: '', startDate: '', endDate: '', status: 'Open', templateId: '', teamIds: [] });
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', type: 'danger', onConfirm: () => {} });
   const [viewingPeriodId, setViewingPeriodId] = useState(null);
 
@@ -58,8 +58,12 @@ const ReviewPeriodManager = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/review-periods', formData);
-      setFormData({ name: '', startDate: '', endDate: '', status: 'Open', templateId: '', teamIds: [] });
+      const payload = { ...formData };
+      if (!payload.templateId) {
+        payload.templateId = null;
+      }
+      await api.post('/review-periods', payload);
+      setFormData({ name: '', monthYear: '', startDate: '', endDate: '', status: 'Open', templateId: '', teamIds: [] });
       setIsModalOpen(false);
       toast.success('Tạo kỳ đánh giá thành công!');
       fetchPeriods();
@@ -96,15 +100,25 @@ const ReviewPeriodManager = () => {
     }
   };
 
+  const handleOpenModal = () => {
+    let latestTemplateId = '';
+    if (templates && templates.length > 0) {
+      const latest = [...templates].sort((a, b) => b.id - a.id)[0];
+      latestTemplateId = latest.id;
+    }
+    setFormData({ name: '', monthYear: '', startDate: '', endDate: '', status: 'Open', templateId: latestTemplateId, teamIds: [] });
+    setIsModalOpen(true);
+  };
+
   if (viewingPeriodId) {
-    return <TeamReview periodId={viewingPeriodId} onBack={() => setViewingPeriodId(null)} />;
+    return <TeamReview periodId={viewingPeriodId} onBack={() => setViewingPeriodId(null)} isAdminView={true} />;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-slate-800">Danh sách Kỳ Đánh Giá</h3>
-        <button onClick={() => setIsModalOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
+        <button onClick={handleOpenModal} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
           <Plus className="w-4 h-4" /> Mở kỳ đánh giá
         </button>
       </div>
@@ -114,6 +128,7 @@ const ReviewPeriodManager = () => {
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
               <th className="p-4 font-medium">Tên</th>
+              <th className="p-4 font-medium">Kỳ (Tháng)</th>
               <th className="p-4 font-medium">Từ ngày</th>
               <th className="p-4 font-medium">Đến ngày</th>
               <th className="p-4 font-medium">Đối tượng</th>
@@ -126,6 +141,7 @@ const ReviewPeriodManager = () => {
             {periods.map(p => (
               <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                 <td className="p-4 font-medium text-slate-800">{p.name}</td>
+                <td className="p-4 text-slate-600 font-semibold">{p.monthYear || '---'}</td>
                 <td className="p-4 text-slate-600">{new Date(p.startDate).toLocaleDateString('vi-VN')}</td>
                 <td className="p-4 text-slate-600">{new Date(p.endDate).toLocaleDateString('vi-VN')}</td>
                 <td className="p-4">
@@ -173,9 +189,15 @@ const ReviewPeriodManager = () => {
               </button>
             </div>
             <form onSubmit={handleCreate} className="p-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tên kỳ đánh giá</label>
-                <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none" placeholder="Ví dụ: Đánh giá nhân sự Q1/2026" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Tên kỳ đánh giá</label>
+                  <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none" placeholder="Ví dụ: Đánh giá nhân sự Q1/2026" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Tháng đánh giá</label>
+                  <input type="month" required value={formData.monthYear} onChange={e => setFormData({...formData, monthYear: e.target.value})} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -191,7 +213,6 @@ const ReviewPeriodManager = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Biểu mẫu đánh giá</label>
                   <select value={formData.templateId} onChange={e => setFormData({...formData, templateId: e.target.value})} className="w-full border-slate-300 rounded-lg p-2.5 border focus:ring-purple-500 focus:border-purple-500 outline-none">
-                    <option value="">-- Mặc định --</option>
                     {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
